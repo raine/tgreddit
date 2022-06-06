@@ -16,6 +16,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # # Step 3: Build the binary
 FROM rust:1.61.0-slim-buster as builder
 WORKDIR /app
+RUN rustup target add x86_64-unknown-linux-musl
 RUN apt-get update && apt-get install -y \
   musl-tools \
   && rm -rf /var/lib/apt/lists/*
@@ -23,12 +24,16 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY --from=cacher /app/target target
 COPY --from=cacher $CARGO_HOME $CARGO_HOME
-RUN rustup target add x86_64-unknown-linux-musl
 # RUN cargo install --target x86_64-unknown-linux-musl --path .
 RUN cargo build --release --target x86_64-unknown-linux-musl
 RUN ls -l /app/target/x86_64-unknown-linux-musl/release
 
-FROM scratch
+FROM debian:buster-slim
 WORKDIR /app
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/tgreddit .
+RUN apt-get update && apt-get install -y \
+  curl python3 ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2022.05.18/yt-dlp -o /usr/local/bin/yt-dlp
+RUN chmod a+rx /usr/local/bin/yt-dlp
 ENTRYPOINT ["./tgreddit"]
