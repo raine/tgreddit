@@ -4,20 +4,24 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.57"
+cached = "0.34.0"
 duct = "0.13.5"
 env_logger = "0.9.0"
+frankenstein = "0.15.0"
+html-escape = "0.2.11"
+lazy_static = "1.4.0"
 log = "0.4.17"
+lru = "0.7.6"
+regex = { version = "1.5.6", default-features = false, features = ["std", "unicode-perl"] }
 serde = { version = "1.0.137", features = ["derive"] }
+serde_derive = "1.0.137"
 serde_json = "1.0.81"
+syn = { version = "1.0.95", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tempdir = "0.3.7"
+toml = "0.5.9"
 ureq = { version = "2.4.0", features = ["json"] }
 url = "2.2.2"
-frankenstein = "0.15.0"
-regex = { version = "1.5.6", default-features = false, features = ["std", "unicode-perl"] }
-lazy_static = "1.4.0"
-toml = "0.5.9"
-serde_derive = "1.0.137"
-cached = "0.34.0"
-html-escape = "0.2.11"
-lru = "0.7.6"
-anyhow = "1.0.57"
+
+[package.metadata.hackerman.stash.dependencies]
+syn = false
