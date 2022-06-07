@@ -1,9 +1,18 @@
 use anyhow::Result;
-use std::time::Duration;
-
 use frankenstein::Api;
 use log::{error, info, warn};
 use seen_posts_cache::SeenPostsCache;
+use signal_hook::{
+    consts::signal::{SIGINT, SIGTERM},
+    iterator::Signals,
+};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    },
+    time::Duration,
+};
 
 mod config;
 mod messages;
@@ -16,16 +25,36 @@ mod ytdlp;
 fn main() -> Result<()> {
     env_logger::init();
     let config = config::read_config();
+    info!("starting with config: {config:?}");
     let mut seen_posts_cache = SeenPostsCache::new();
     let tg_api = Api::new(&config.telegram_bot_token);
 
-    loop {
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (send, recv) = mpsc::channel();
+
+    {
+        let shutdown = shutdown.clone();
+        std::thread::spawn(move || {
+            let mut forward_signals =
+                Signals::new(&[SIGINT, SIGTERM]).expect("Unable to watch for signals");
+
+            for _signal in forward_signals.forever() {
+                shutdown.swap(true, Ordering::Relaxed);
+                send.send(()).unwrap();
+            }
+        });
+    }
+
+    while !shutdown.load(Ordering::Acquire) {
         for (chat_id, subreddits) in &config.channels {
             handle_channel_config(&config, &tg_api, &mut seen_posts_cache, chat_id, subreddits)
         }
 
-        std::thread::sleep(Duration::from_secs(config.check_interval_secs))
+        // Sleep that can be interrupted from the thread above
+        let _r = recv.recv_timeout(Duration::from_secs(config.check_interval_secs));
     }
+
+    Ok(())
 }
 
 fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {

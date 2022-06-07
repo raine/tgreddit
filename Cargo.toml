@@ -17,6 +17,7 @@ regex = { version = "1.5.6", default-features = false, features = ["std", "unico
 serde = { version = "1.0.137", features = ["derive"] }
 serde_derive = "1.0.137"
 serde_json = "1.0.81"
+signal-hook = "0.3.14"
 syn = { version = "1.0.95", features = ["extra-traits", "full", "visit", "visit-mut"] }
 tempdir = "0.3.7"
 toml = "0.5.9"
