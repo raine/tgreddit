@@ -9,17 +9,18 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Step 2: Cache project dependencies
 FROM rust:1.61.0-slim-buster as cacher
 WORKDIR /app
+RUN rustup target add x86_64-unknown-linux-musl
+RUN apt-get update && apt-get install -y \
+  musl-tools \
+  && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json
 
 # # Step 3: Build the binary
 FROM rust:1.61.0-slim-buster as builder
 WORKDIR /app
 RUN rustup target add x86_64-unknown-linux-musl
-RUN apt-get update && apt-get install -y \
-  musl-tools \
-  && rm -rf /var/lib/apt/lists/*
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY --from=cacher /app/target target
