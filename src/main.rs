@@ -72,7 +72,7 @@ fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
 }
 
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    if post.is_video {
+    if post.is_downloadable_video() {
         handle_new_video_post(tg_api, chat_id, post)
     } else {
         warn!("post is not a video, not doing anything");
