@@ -51,8 +51,9 @@ impl Post {
             let url = Url::parse(&self.url)?;
             let host = url.host_str().context("no host in url")?;
             let path = url.path();
-            let is_imgur_gifv = host == "i.imgur.com" && path.ends_with(".gifv");
-            Ok(is_imgur_gifv)
+            let is_imgur_gif = host == "i.imgur.com" && path.ends_with(".gifv");
+            let is_gfycat_gif = host == "gfycat.com";
+            Ok(is_imgur_gif || is_gfycat_gif)
         };
 
         self.is_video || is_downloadable_3rd_party().unwrap_or(false)
