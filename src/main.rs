@@ -105,12 +105,12 @@ fn handle_channel_config(
                         && config.skip_initial_send;
 
                     if should_skip_initial_send {
-                        seen_posts_cache.mark_as_seen(*chat_id, subreddit, &post.id);
+                        seen_posts_cache.mark_seen(*chat_id, subreddit, &post.id);
                         continue;
                     }
 
                     match handle_new_post(tg_api, *chat_id, &post) {
-                        Ok(_) => seen_posts_cache.mark_as_seen(*chat_id, subreddit, &post.id),
+                        Ok(_) => seen_posts_cache.mark_seen(*chat_id, subreddit, &post.id),
                         Err(e) => error!("failed to handle new post: {e}"),
                     }
                 }

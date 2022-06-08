@@ -38,7 +38,7 @@ impl SeenPostsCache {
         }
     }
 
-    pub(crate) fn mark_as_seen(&mut self, chat_id: i64, subreddit: &str, post_id: &str) {
+    pub(crate) fn mark_seen(&mut self, chat_id: i64, subreddit: &str, post_id: &str) {
         // Initialize empty set for channel's seen post ids
         if self.channel_posts.get(&chat_id).is_none() {
             self.channel_posts
