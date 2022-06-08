@@ -39,7 +39,7 @@ pub struct Post {
     pub ups: u32,
     pub permalink: String,
     pub url: String,
-    pub post_hint: String,
+    pub post_hint: Option<String>,
 }
 
 impl Post {
@@ -61,7 +61,7 @@ impl Post {
     }
 
     pub fn is_image(&self) -> bool {
-        self.post_hint == "image"
+        self.post_hint.as_deref() == Some("image")
     }
 }
 
@@ -74,7 +74,7 @@ mod tests {
         let imgur_gifv = Post {
             id: "v6nu75".into(),
             created: 1654581100.0,
-            post_hint: "link".into(),
+            post_hint: Some("link".into()),
             subreddit: "absoluteunit".into(),
             title: "Tipping a cow to trim its hooves".into(),
             is_video: false,
@@ -91,7 +91,7 @@ mod tests {
         let post = Post {
             id: "v7i7os".into(),
             created: 1654667500.0,
-            post_hint: "image".into(),
+            post_hint: Some("image".into()),
             subreddit: "absoluteunit".into(),
             title: "gigantic driftwood that washed ashore in Washington".into(),
             is_video: false,
