@@ -1,4 +1,5 @@
 use super::*;
+use anyhow::{Context, Result};
 use cached::proc_macro::cached;
 use log::info;
 use url::Url;
@@ -37,4 +38,19 @@ pub fn get_subreddit_top_posts(
     let res: ListingResponse = req.call()?.into_json()?;
     let posts = res.data.children.into_iter().map(|e| e.data).collect();
     Ok(posts)
+}
+
+pub fn get_link(link_id: &str) -> Result<Post> {
+    info!("getting link id {link_id}");
+    let mut url = get_base_url().join("/api/info.json")?;
+    url.query_pairs_mut()
+        .append_pair("id", &format!("t3_{link_id}"));
+    let req = ureq::get(&url.to_string());
+    let res: ListingResponse = req.call()?.into_json()?;
+    res.data
+        .children
+        .into_iter()
+        .map(|e| e.data)
+        .next()
+        .context("no post in response")
 }

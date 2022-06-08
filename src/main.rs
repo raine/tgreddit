@@ -14,6 +14,7 @@ use std::{
     time::Duration,
 };
 
+mod args;
 mod config;
 mod messages;
 mod reddit;
@@ -25,9 +26,25 @@ mod ytdlp;
 fn main() -> Result<()> {
     env_logger::init();
     let config = config::read_config();
-    info!("starting with config: {config:?}");
-    let mut seen_posts_cache = SeenPostsCache::new();
     let tg_api = Api::new(&config.telegram_bot_token);
+    info!("starting with config: {config:?}");
+
+    // Any arguments are for things that help with debugging and development
+    // Not optimized for usability.
+    //
+    // Usage: tgreddit --debug-post <linkid>                    => Fetch post and print deserialized post
+    //        tgreddit --debug-post <linkid> --chat-id <chatid> => Also send to telegram
+    let opts = args::parse_args();
+    if let Some(post_id) = opts.opt_str("debug-post") {
+        let post = reddit::get_link(&post_id).unwrap();
+        info!("{:#?}", post);
+        if let Some(chat_id) = opts.opt_str("chat-id") {
+            return handle_new_post(&tg_api, chat_id.parse().unwrap(), &post);
+        }
+        return Ok(());
+    }
+
+    let mut seen_posts_cache = SeenPostsCache::new();
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let (send, recv) = mpsc::channel();

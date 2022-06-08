@@ -9,6 +9,7 @@ cached = { version = "0.34.0", default-features = false, features = ["proc_macro
 duct = "0.13.5"
 env_logger = "0.9.0"
 frankenstein = "0.15.0"
+getopts = "0.2.21"
 html-escape = "0.2.11"
 lazy_static = "1.4.0"
 log = "0.4.17"
