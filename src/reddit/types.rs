@@ -63,6 +63,10 @@ impl Post {
     pub fn is_image(&self) -> bool {
         self.post_hint.as_deref() == Some("image")
     }
+
+    pub fn is_link(&self) -> bool {
+        self.post_hint.as_deref() == Some("link")
+    }
 }
 
 #[cfg(test)]

@@ -126,11 +126,18 @@ fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
     }
 }
 
+fn handle_new_link_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    let message_html = messages::format_link_message_html(post);
+    telegram::send_message(tg_api, chat_id, &message_html).map(|_| ())
+}
+
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
     if post.is_downloadable_video() {
         handle_new_video_post(tg_api, chat_id, post)
     } else if post.is_image() {
         handle_new_image_post(tg_api, chat_id, post)
+    } else if post.is_link() {
+        handle_new_link_post(tg_api, chat_id, post)
     } else {
         warn!("don't know what to do with the post");
         Ok(())

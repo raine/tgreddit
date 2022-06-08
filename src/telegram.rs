@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use frankenstein::{
-    Api, InputFile, Message, MethodResponse, ParseMode, SendPhotoParams, SendVideoParams,
-    TelegramApi,
+    Api, InputFile, Message, MethodResponse, ParseMode, SendMessageParams, SendPhotoParams,
+    SendVideoParams, TelegramApi,
 };
 
 use crate::types::*;
@@ -46,5 +46,21 @@ pub fn upload_image(
 
     tg_api
         .send_photo(&send_photo_params)
+        .map_err(anyhow::Error::from)
+}
+
+pub fn send_message(
+    tg_api: &Api,
+    chat_id: i64,
+    message_html: &str,
+) -> Result<MethodResponse<Message>> {
+    let send_message_params = SendMessageParams::builder()
+        .chat_id(chat_id)
+        .text(message_html)
+        .parse_mode(ParseMode::Html)
+        .build();
+
+    tg_api
+        .send_message(&send_message_params)
         .map_err(anyhow::Error::from)
 }
