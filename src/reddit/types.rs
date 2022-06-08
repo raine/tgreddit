@@ -39,6 +39,7 @@ pub struct Post {
     pub ups: u32,
     pub permalink: String,
     pub url: String,
+    pub post_hint: String,
 }
 
 impl Post {
@@ -58,6 +59,10 @@ impl Post {
 
         self.is_video || is_downloadable_3rd_party().unwrap_or(false)
     }
+
+    pub fn is_image(&self) -> bool {
+        self.post_hint == "image"
+    }
 }
 
 #[cfg(test)]
@@ -69,6 +74,7 @@ mod tests {
         let imgur_gifv = Post {
             id: "v6nu75".into(),
             created: 1654581100.0,
+            post_hint: "link".into(),
             subreddit: "absoluteunit".into(),
             title: "Tipping a cow to trim its hooves".into(),
             is_video: false,
@@ -78,5 +84,23 @@ mod tests {
         };
 
         assert!(imgur_gifv.is_downloadable_video());
+    }
+
+    #[test]
+    fn is_image() {
+        let post = Post {
+            id: "v7i7os".into(),
+            created: 1654667500.0,
+            post_hint: "image".into(),
+            subreddit: "absoluteunit".into(),
+            title: "gigantic driftwood that washed ashore in Washington".into(),
+            is_video: false,
+            ups: 438,
+            permalink: "/r/absoluteunit/comments/v7i7os/gigantic_driftwood_that_washed_ashore_in/"
+                .into(),
+            url: "https://i.redd.it/9x22l6lp0c491.jpg".into(),
+        };
+
+        assert!(post.is_image());
     }
 }

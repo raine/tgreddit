@@ -7,7 +7,7 @@ fn format_html_anchor(href: &str, text: &str) -> String {
     )
 }
 
-pub fn format_video_caption_html(post: &reddit::Post) -> String {
+pub fn format_media_caption_html(post: &reddit::Post) -> String {
     let title = &post.title;
     let subreddit_link = format_html_anchor(
         &reddit::format_subreddit_url(&post.subreddit),

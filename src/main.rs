@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use frankenstein::Api;
 use log::{error, info, warn};
 use seen_posts_cache::SeenPostsCache;
@@ -7,12 +7,17 @@ use signal_hook::{
     iterator::Signals,
 };
 use std::{
+    fs::File,
+    io,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Arc,
     },
     time::Duration,
 };
+use tempdir::TempDir;
+use url::Url;
 
 mod args;
 mod config;
@@ -78,7 +83,7 @@ fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
     match ytdlp::download(&post.format_permalink_url()) {
         Ok(video) => {
             info!("got a video: {video:?}");
-            let caption = messages::format_video_caption_html(post);
+            let caption = messages::format_media_caption_html(post);
             telegram::upload_video(tg_api, chat_id, &video, &caption).map(|_| ())
         }
         Err(e) => {
@@ -88,11 +93,46 @@ fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
     }
 }
 
+/// Downloads url to a file and returns the path along with handle to temp dir in which the file is.
+/// Whe the temp dir value is dropped, the contents in file system are deleted.
+fn download_url(url: &str) -> Result<(PathBuf, TempDir)> {
+    info!("downloading {url}");
+    let req = ureq::get(url);
+    let res = req.call()?;
+    let tmp_dir = TempDir::new("tgreddit")?;
+    let mut reader = res.into_reader();
+    let parsed_url = Url::parse(url)?;
+    let tmp_filename = Path::new(parsed_url.path())
+        .file_name()
+        .context("could not get basename from url")?;
+    let tmp_path = tmp_dir.path().join(&tmp_filename);
+    let mut file = File::create(&tmp_path).unwrap();
+    io::copy(&mut reader, &mut file)?;
+    info!("downloaded {url} to {}", tmp_path.to_string_lossy());
+    Ok((tmp_path, tmp_dir))
+}
+
+fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    match download_url(&post.url) {
+        Ok((path, _tmp_dir)) => {
+            // path will be deleted when _tmp_dir when goes out of scope
+            let caption = messages::format_media_caption_html(post);
+            telegram::upload_image(tg_api, chat_id, path, &caption).map(|_| ())
+        }
+        Err(e) => {
+            error!("failed to download image: {e}");
+            Err(e)
+        }
+    }
+}
+
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
     if post.is_downloadable_video() {
         handle_new_video_post(tg_api, chat_id, post)
+    } else if post.is_image() {
+        handle_new_image_post(tg_api, chat_id, post)
     } else {
-        warn!("post is not a video, not doing anything");
+        warn!("don't know what to do with the post");
         Ok(())
     }
 }
