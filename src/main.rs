@@ -166,7 +166,7 @@ fn handle_channel_config(
                 info!("got {} post(s) for subreddit /r/{subreddit}", posts.len());
                 for post in posts {
                     info!("got {post:?}");
-                    if seen_posts_cache.is_seen_post(*chat_id, &post.id) {
+                    if seen_posts_cache.is_seen_post(*chat_id, &subreddit, &post.id) {
                         info!("post already seen, skipping...");
                         continue;
                     }
