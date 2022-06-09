@@ -84,7 +84,12 @@ fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
         Ok(video) => {
             info!("got a video: {video:?}");
             let caption = messages::format_media_caption_html(post);
-            telegram::upload_video(tg_api, chat_id, &video, &caption).map(|_| ())
+            telegram::upload_video(tg_api, chat_id, &video, &caption).map(|_| ())?;
+            info!(
+                "video uploaded post_id={} chat_id={chat_id} video={video:?}",
+                post.id
+            );
+            Ok(())
         }
         Err(e) => {
             error!("failed to download video: {e}");
@@ -117,7 +122,9 @@ fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
             let caption = messages::format_media_caption_html(post);
-            telegram::upload_image(tg_api, chat_id, path, &caption).map(|_| ())
+            telegram::upload_image(tg_api, chat_id, path, &caption).map(|_| ())?;
+            info!("image uploaded post_id={} chat_id={chat_id}", post.id);
+            Ok(())
         }
         Err(e) => {
             error!("failed to download image: {e}");
@@ -128,7 +135,9 @@ fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
 
 fn handle_new_link_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
     let message_html = messages::format_link_message_html(post);
-    telegram::send_message(tg_api, chat_id, &message_html).map(|_| ())
+    telegram::send_message(tg_api, chat_id, &message_html).map(|_| ())?;
+    info!("message sent post_id={} chat_id={chat_id}", post.id);
+    Ok(())
 }
 
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
