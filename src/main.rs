@@ -139,7 +139,7 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
     } else if post.is_link() {
         handle_new_link_post(tg_api, chat_id, post)
     } else {
-        warn!("don't know what to do with the post");
+        warn!("don't know what to do with {post:?}");
         Ok(())
     }
 }
