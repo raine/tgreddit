@@ -135,7 +135,14 @@ fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
 
 fn handle_new_link_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
     let message_html = messages::format_link_message_html(post);
-    telegram::send_message(tg_api, chat_id, &message_html).map(|_| ())?;
+    telegram::send_message(tg_api, chat_id, &message_html, false).map(|_| ())?;
+    info!("message sent post_id={} chat_id={chat_id}", post.id);
+    Ok(())
+}
+
+fn handle_new_self_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    let message_html = messages::format_self_message_html(post);
+    telegram::send_message(tg_api, chat_id, &message_html, true).map(|_| ())?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
 }
@@ -147,6 +154,8 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
         handle_new_image_post(tg_api, chat_id, post)
     } else if post.is_link() {
         handle_new_link_post(tg_api, chat_id, post)
+    } else if post.is_self {
+        handle_new_self_post(tg_api, chat_id, post)
     } else {
         warn!("don't know what to do with {post:?}");
         Ok(())

@@ -40,6 +40,7 @@ pub struct Post {
     pub permalink: String,
     pub url: String,
     pub post_hint: Option<String>,
+    pub is_self: bool,
 }
 
 impl Post {
@@ -81,6 +82,7 @@ mod tests {
             post_hint: Some("link".into()),
             subreddit: "absoluteunit".into(),
             title: "Tipping a cow to trim its hooves".into(),
+            is_self: false,
             is_video: false,
             ups: 469,
             permalink: "/r/absoluteunit/comments/v6nu75/tipping_a_cow_to_trim_its_hooves/".into(),
@@ -97,6 +99,7 @@ mod tests {
             created: 1654667500.0,
             post_hint: Some("image".into()),
             subreddit: "absoluteunit".into(),
+            is_self: false,
             title: "gigantic driftwood that washed ashore in Washington".into(),
             is_video: false,
             ups: 438,

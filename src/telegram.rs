@@ -53,11 +53,13 @@ pub fn send_message(
     tg_api: &Api,
     chat_id: i64,
     message_html: &str,
+    disable_web_page_preview: bool,
 ) -> Result<MethodResponse<Message>> {
     let send_message_params = SendMessageParams::builder()
         .chat_id(chat_id)
         .text(message_html)
         .parse_mode(ParseMode::Html)
+        .disable_web_page_preview(disable_web_page_preview)
         .build();
 
     tg_api

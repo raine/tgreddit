@@ -28,6 +28,10 @@ pub fn format_link_message_html(post: &reddit::Post) -> String {
     format!("{title}\n{subreddit_link} [{comments_link}]")
 }
 
+pub fn format_self_message_html(post: &reddit::Post) -> String {
+    format_media_caption_html(post)
+}
+
 #[cfg(test)]
 mod tests {
     use super::format_html_anchor;
