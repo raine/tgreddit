@@ -1,10 +1,11 @@
 use crate::reddit;
 
+fn escape(html: &str) -> String {
+    html.replace('<', "&lt;").replace('>', "&gt;")
+}
+
 fn format_html_anchor(href: &str, text: &str) -> String {
-    format!(
-        r#"<a href="{href}">{}</a>"#,
-        html_escape::encode_text(&text)
-    )
+    format!(r#"<a href="{href}">{}</a>"#, escape(text))
 }
 
 fn format_subreddit_link(subreddit: &str) -> String {
