@@ -148,6 +148,10 @@ fn handle_new_self_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Resu
 }
 
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    if post.post_hint.is_none() {
+        warn!("there is no post_hint in {post:#?}")
+    }
+
     if post.is_downloadable_video() {
         handle_new_video_post(tg_api, chat_id, post)
     } else if post.is_image() {
