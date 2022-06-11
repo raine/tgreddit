@@ -148,21 +148,31 @@ fn handle_new_self_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Resu
 }
 
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    if post.post_hint.is_none() {
-        warn!("there is no post_hint in {post:#?}")
-    }
-
-    if post.is_downloadable_video() {
-        handle_new_video_post(tg_api, chat_id, post)
-    } else if post.is_image() {
-        handle_new_image_post(tg_api, chat_id, post)
-    } else if post.is_link() {
-        handle_new_link_post(tg_api, chat_id, post)
-    } else if post.is_self {
-        handle_new_self_post(tg_api, chat_id, post)
-    } else {
-        warn!("don't know what to do with {post:?}");
-        Ok(())
+    match &post.post_hint {
+        None => {
+            let post = reddit::get_link(&post.id).unwrap();
+            match post.post_hint {
+                Some(_) => handle_new_post(tg_api, chat_id, &post),
+                None => {
+                    warn!("post still missing post_hint even when queried directly, skipping");
+                    Ok(())
+                }
+            }
+        }
+        Some(_) => {
+            if post.is_downloadable_video() {
+                handle_new_video_post(tg_api, chat_id, post)
+            } else if post.is_image() {
+                handle_new_image_post(tg_api, chat_id, post)
+            } else if post.is_link() {
+                handle_new_link_post(tg_api, chat_id, post)
+            } else if post.is_self {
+                handle_new_self_post(tg_api, chat_id, post)
+            } else {
+                warn!("don't know what to do with {post:?}");
+                Ok(())
+            }
+        }
     }
 }
 
@@ -179,7 +189,7 @@ fn handle_channel_config(
                 info!("got {} post(s) for subreddit /r/{subreddit}", posts.len());
                 for post in posts {
                     info!("got {post:?}");
-                    if seen_posts_cache.is_seen_post(*chat_id, &subreddit, &post.id) {
+                    if seen_posts_cache.is_seen_post(*chat_id, subreddit, &post.id) {
                         info!("post already seen, skipping...");
                         continue;
                     }
