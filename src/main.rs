@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use frankenstein::Api;
-use log::{error, info, warn};
+use log::*;
 use seen_posts_cache::SeenPostsCache;
 use signal_hook::{
     consts::signal::{SIGINT, SIGTERM},
@@ -186,11 +186,11 @@ fn handle_channel_config(
     for subreddit in subreddits {
         match reddit::get_subreddit_top_posts(subreddit, 1, reddit::TopPostsTimePeriod::Day) {
             Ok(posts) => {
-                info!("got {} post(s) for subreddit /r/{subreddit}", posts.len());
+                debug!("got {} post(s) for subreddit /r/{subreddit}", posts.len());
                 for post in posts {
-                    info!("got {post:?}");
+                    debug!("got {post:?}");
                     if seen_posts_cache.is_seen_post(*chat_id, subreddit, &post.id) {
-                        info!("post already seen, skipping...");
+                        debug!("post already seen, skipping...");
                         continue;
                     }
 
