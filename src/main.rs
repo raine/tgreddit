@@ -148,6 +148,8 @@ fn handle_new_self_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Resu
 }
 
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    info!("got new {post:#?}");
+    // TODO: It appears that post with is_gallery=true will never have post_hint set
     match &post.post_hint {
         None => {
             let post = reddit::get_link(&post.id).unwrap();
@@ -181,15 +183,23 @@ fn handle_channel_config(
     tg_api: &Api,
     seen_posts_cache: &mut SeenPostsCache,
     chat_id: &i64,
-    subreddits: &[String],
+    subreddit_configs: &[config::SubredditConfig],
 ) {
-    for subreddit in subreddits {
-        match reddit::get_subreddit_top_posts(subreddit, 1, reddit::TopPostsTimePeriod::Day) {
+    for subreddit_config in subreddit_configs {
+        let subreddit = &subreddit_config.subreddit;
+        let limit = subreddit_config.limit;
+        let time = &subreddit_config.time;
+
+        match reddit::get_subreddit_top_posts(subreddit, limit, time) {
             Ok(posts) => {
-                debug!("got {} post(s) for subreddit /r/{subreddit}", posts.len());
+                debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
                 for post in posts {
                     debug!("got {post:?}");
-                    if seen_posts_cache.is_seen_post(*chat_id, subreddit, &post.id) {
+                    if seen_posts_cache.is_seen_post(
+                        *chat_id,
+                        &subreddit_config.subreddit,
+                        &post.id,
+                    ) {
                         debug!("post already seen, skipping...");
                         continue;
                     }
@@ -212,7 +222,7 @@ fn handle_channel_config(
                 }
             }
             Err(e) => {
-                error!("failed to get posts for {subreddit}: {e}")
+                error!("failed to get posts for {}: {e}", subreddit)
             }
         }
     }

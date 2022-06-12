@@ -2,6 +2,8 @@ use log::error;
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, env};
 
+use crate::reddit::TopPostsTimePeriod;
+
 const CONFIG_PATH_ENV: &str = "CONFIG_PATH";
 
 #[derive(Deserialize, Debug)]
@@ -14,13 +16,20 @@ pub struct Config {
     pub channels: ChannelsConfig,
 }
 
-pub type ChannelsConfig = HashMap<i64, Vec<String>>;
+#[derive(Deserialize, Debug)]
+pub struct SubredditConfig {
+    pub subreddit: String,
+    pub limit: u32,
+    pub time: TopPostsTimePeriod,
+}
+
+pub type ChannelsConfig = HashMap<i64, Vec<SubredditConfig>>;
 
 fn deserialize_channel_config<'de, D>(deserializer: D) -> Result<ChannelsConfig, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let str_map: HashMap<&str, Vec<String>> = HashMap::deserialize(deserializer)?;
+    let str_map: HashMap<&str, Vec<SubredditConfig>> = HashMap::deserialize(deserializer)?;
     Ok(str_map
         .into_iter()
         .map(|(key, val)| (key.parse::<i64>().unwrap(), val))

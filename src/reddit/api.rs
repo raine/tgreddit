@@ -27,7 +27,7 @@ pub fn format_subreddit_url(subreddit: &str) -> String {
 pub fn get_subreddit_top_posts(
     subreddit: &str,
     limit: u32,
-    time: TopPostsTimePeriod,
+    time: &TopPostsTimePeriod,
 ) -> Result<Vec<Post>, ureq::Error> {
     info!("getting top posts for /r/{subreddit} limit={limit} time={time:?}");
     let mut url = get_base_url().join(&format!("/r/{subreddit}/top.json"))?;

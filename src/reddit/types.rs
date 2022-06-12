@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TopPostsTimePeriod {
     Hour,
     Day,
