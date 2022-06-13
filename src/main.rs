@@ -166,6 +166,10 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
             reddit::PostType::Video => handle_new_video_post(tg_api, chat_id, post),
             reddit::PostType::Link => handle_new_link_post(tg_api, chat_id, post),
             reddit::PostType::SelfText => handle_new_self_post(tg_api, chat_id, post),
+            reddit::PostType::Unknown => {
+                warn!("unknown post type, skipping");
+                Ok(())
+            }
         },
     }
 }

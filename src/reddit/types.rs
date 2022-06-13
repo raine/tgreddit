@@ -1,6 +1,5 @@
 use super::*;
 use anyhow::{Context, Result};
-use serde::de;
 use serde::{Deserialize, Deserializer};
 use url::Url;
 
@@ -11,6 +10,7 @@ pub enum PostType {
     Video,
     Link,
     SelfText,
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize)]
@@ -99,7 +99,7 @@ impl<'de> Deserialize<'de> for Post {
         } else if helper.is_self {
             Ok(PostType::SelfText)
         } else {
-            Err(de::Error::custom("unknown post type"))
+            Ok(PostType::Unknown)
         }?;
 
         Ok(Post {
