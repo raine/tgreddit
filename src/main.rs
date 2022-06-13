@@ -69,7 +69,13 @@ fn main() -> Result<()> {
 
     while !shutdown.load(Ordering::Acquire) {
         for (chat_id, subreddits) in &config.channels {
-            check_new_for_channel(&config, &tg_api, &mut seen_posts_cache, chat_id, subreddits)
+            check_new_posts_for_channel(
+                &config,
+                &tg_api,
+                &mut seen_posts_cache,
+                chat_id,
+                subreddits,
+            )
         }
 
         // Sleep that can be interrupted from the thread above
@@ -174,7 +180,7 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
     }
 }
 
-fn check_new_for_channel(
+fn check_new_posts_for_channel(
     config: &config::Config,
     tg_api: &Api,
     seen_posts_cache: &mut SeenPostsCache,
