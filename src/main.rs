@@ -69,7 +69,7 @@ fn main() -> Result<()> {
 
     while !shutdown.load(Ordering::Acquire) {
         for (chat_id, subreddits) in &config.channels {
-            handle_channel_config(&config, &tg_api, &mut seen_posts_cache, chat_id, subreddits)
+            check_new_for_channel(&config, &tg_api, &mut seen_posts_cache, chat_id, subreddits)
         }
 
         // Sleep that can be interrupted from the thread above
@@ -161,24 +161,16 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
                 }
             }
         }
-        Some(_) => {
-            if post.is_downloadable_video() {
-                handle_new_video_post(tg_api, chat_id, post)
-            } else if post.is_image() {
-                handle_new_image_post(tg_api, chat_id, post)
-            } else if post.is_link() {
-                handle_new_link_post(tg_api, chat_id, post)
-            } else if post.is_self {
-                handle_new_self_post(tg_api, chat_id, post)
-            } else {
-                warn!("don't know what to do with {post:?}");
-                Ok(())
-            }
-        }
+        Some(_) => match post.post_type {
+            reddit::PostType::Image => handle_new_image_post(tg_api, chat_id, post),
+            reddit::PostType::Video => handle_new_video_post(tg_api, chat_id, post),
+            reddit::PostType::Link => handle_new_link_post(tg_api, chat_id, post),
+            reddit::PostType::SelfText => handle_new_self_post(tg_api, chat_id, post),
+        },
     }
 }
 
-fn handle_channel_config(
+fn check_new_for_channel(
     config: &config::Config,
     tg_api: &Api,
     seen_posts_cache: &mut SeenPostsCache,
@@ -195,6 +187,14 @@ fn handle_channel_config(
                 debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
                 for post in posts {
                     debug!("got {post:?}");
+
+                    if subreddit_config.filter.is_some()
+                        && subreddit_config.filter.as_ref() != Some(&post.post_type)
+                    {
+                        debug!("filter set and post does not match filter, skipping");
+                        continue;
+                    }
+
                     if seen_posts_cache.is_seen_post(
                         *chat_id,
                         &subreddit_config.subreddit,

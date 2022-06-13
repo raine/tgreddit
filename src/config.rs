@@ -2,7 +2,7 @@ use log::error;
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, env};
 
-use crate::reddit::TopPostsTimePeriod;
+use crate::reddit::{PostType, TopPostsTimePeriod};
 
 const CONFIG_PATH_ENV: &str = "CONFIG_PATH";
 
@@ -21,6 +21,7 @@ pub struct SubredditConfig {
     pub subreddit: String,
     pub limit: u32,
     pub time: TopPostsTimePeriod,
+    pub filter: Option<PostType>,
 }
 
 pub type ChannelsConfig = HashMap<i64, Vec<SubredditConfig>>;
