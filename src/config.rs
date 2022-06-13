@@ -5,6 +5,8 @@ use std::{collections::HashMap, env};
 use crate::reddit::{PostType, TopPostsTimePeriod};
 
 const CONFIG_PATH_ENV: &str = "CONFIG_PATH";
+const DEFAULT_LIMIT: u32 = 1;
+const DEFAULT_TIME_PERIOD: TopPostsTimePeriod = TopPostsTimePeriod::Day;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -19,7 +21,9 @@ pub struct Config {
 #[derive(Deserialize, Debug)]
 pub struct SubredditConfig {
     pub subreddit: String,
+    #[serde(default = "default_limit")]
     pub limit: u32,
+    #[serde(default = "default_time_period")]
     pub time: TopPostsTimePeriod,
     pub filter: Option<PostType>,
 }
@@ -46,4 +50,12 @@ pub fn read_config() -> Config {
             error!("failed to read config: {err}");
             std::process::exit(1);
         })
+}
+
+fn default_limit() -> u32 {
+    DEFAULT_LIMIT
+}
+
+fn default_time_period() -> TopPostsTimePeriod {
+    DEFAULT_TIME_PERIOD
 }
