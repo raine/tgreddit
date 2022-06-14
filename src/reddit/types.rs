@@ -52,6 +52,7 @@ pub struct Post {
     pub post_hint: Option<String>,
     pub is_self: bool,
     pub post_type: PostType,
+    pub crosspost_parent_list: Option<Vec<Post>>,
 }
 
 impl<'de> Deserialize<'de> for Post {
@@ -71,6 +72,7 @@ impl<'de> Deserialize<'de> for Post {
             pub url: String,
             pub post_hint: Option<String>,
             pub is_self: bool,
+            pub crosspost_parent_list: Option<Vec<Post>>,
         }
 
         impl PostHelper {
@@ -84,7 +86,18 @@ impl<'de> Deserialize<'de> for Post {
                     Ok(is_imgur_gif || is_gfycat_gif)
                 };
 
-                self.is_video || is_downloadable_3rd_party().unwrap_or(false)
+                // If the post is a crosspost with a video, it can be downloaded with post.url as
+                // url as yt-dlp follows redirects
+                let is_downloadable_crosspost = || -> bool {
+                    self.crosspost_parent_list
+                        .as_ref()
+                        .map(|list| list.iter().any(|post| post.post_type == PostType::Video))
+                        .unwrap_or(false)
+                };
+
+                self.is_video
+                    || is_downloadable_crosspost()
+                    || is_downloadable_3rd_party().unwrap_or(false)
             }
         }
 
@@ -113,6 +126,7 @@ impl<'de> Deserialize<'de> for Post {
             url: helper.url,
             post_hint: helper.post_hint,
             is_self: helper.is_self,
+            crosspost_parent_list: helper.crosspost_parent_list,
             post_type,
         })
     }
@@ -121,49 +135,5 @@ impl<'de> Deserialize<'de> for Post {
 impl Post {
     pub(crate) fn format_permalink_url(&self) -> String {
         format_url(&self.permalink)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn video() {
-        let post = Post {
-            id: "v6nu75".into(),
-            created: 1654581100.0,
-            post_hint: Some("link".into()),
-            subreddit: "absoluteunit".into(),
-            title: "Tipping a cow to trim its hooves".into(),
-            is_self: false,
-            is_video: false,
-            ups: 469,
-            permalink: "/r/absoluteunit/comments/v6nu75/tipping_a_cow_to_trim_its_hooves/".into(),
-            url: "https://i.imgur.com/Zt6f5mB.gifv".into(),
-            post_type: PostType::Video,
-        };
-
-        assert_eq!(post.post_type, PostType::Video);
-    }
-
-    #[test]
-    fn is_image() {
-        let post = Post {
-            id: "v7i7os".into(),
-            created: 1654667500.0,
-            post_hint: Some("image".into()),
-            subreddit: "absoluteunit".into(),
-            is_self: false,
-            title: "gigantic driftwood that washed ashore in Washington".into(),
-            is_video: false,
-            ups: 438,
-            permalink: "/r/absoluteunit/comments/v7i7os/gigantic_driftwood_that_washed_ashore_in/"
-                .into(),
-            url: "https://i.redd.it/9x22l6lp0c491.jpg".into(),
-            post_type: PostType::Image,
-        };
-
-        assert_eq!(post.post_type, PostType::Image);
     }
 }

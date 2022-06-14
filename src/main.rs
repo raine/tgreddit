@@ -86,7 +86,7 @@ fn main() -> Result<()> {
 }
 
 fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    match ytdlp::download(&post.format_permalink_url()) {
+    match ytdlp::download(&post.url) {
         Ok(video) => {
             info!("got a video: {video:?}");
             let caption = messages::format_media_caption_html(post);
