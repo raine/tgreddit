@@ -104,16 +104,16 @@ impl<'de> Deserialize<'de> for Post {
         let helper = PostHelper::deserialize(deserializer)?;
         let post_hint = helper.post_hint.as_deref();
         let post_type = if helper.is_downloadable_video() {
-            Ok(PostType::Video)
+            PostType::Video
         } else if post_hint == Some("image") {
-            Ok(PostType::Image)
+            PostType::Image
         } else if post_hint == Some("link") {
-            Ok(PostType::Link)
+            PostType::Link
         } else if helper.is_self {
-            Ok(PostType::SelfText)
+            PostType::SelfText
         } else {
-            Ok(PostType::Unknown)
-        }?;
+            PostType::Unknown
+        };
 
         Ok(Post {
             id: helper.id,
