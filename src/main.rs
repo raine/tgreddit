@@ -235,6 +235,8 @@ fn check_new_posts_for_channel(
                         Err(e) => error!("failed to handle new post: {e}"),
                     }
                 }
+
+                seen_posts_cache.set_subreddit_initialized(*chat_id, subreddit);
             }
             Err(e) => {
                 error!("failed to get posts for {}: {e}", subreddit)

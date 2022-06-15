@@ -41,6 +41,19 @@ impl SeenPostsCache {
         }
     }
 
+    pub(crate) fn set_subreddit_initialized(&mut self, chat_id: i64, subreddit: &str) {
+        if self.chats_subreddits_initialized.get(&chat_id).is_none() {
+            self.chats_subreddits_initialized
+                .insert(chat_id, HashSet::new());
+        }
+
+        if let Some(subreddits) = self.chats_subreddits_initialized.get_mut(&chat_id) {
+            if subreddits.insert(subreddit.to_string()) {
+                info!("set subreddit {subreddit} initialized for {chat_id}");
+            }
+        }
+    }
+
     pub(crate) fn mark_seen(&mut self, chat_id: i64, subreddit: &str, post_id: &str) {
         let subreddits_posts = match self.chats_subreddits_posts.get_mut(&chat_id) {
             Some(subreddits_posts) => subreddits_posts,
@@ -60,16 +73,6 @@ impl SeenPostsCache {
         };
 
         posts.put(post_id.to_owned(), true);
-
-        if self.chats_subreddits_initialized.get(&chat_id).is_none() {
-            self.chats_subreddits_initialized
-                .insert(chat_id, HashSet::new());
-        }
-
-        if let Some(subreddits) = self.chats_subreddits_initialized.get_mut(&chat_id) {
-            subreddits.insert(subreddit.to_string());
-        }
-
         info!("marked post id {post_id} as seen for chat {chat_id} and subreddit {subreddit}");
     }
 }
