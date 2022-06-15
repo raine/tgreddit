@@ -5,14 +5,17 @@ use std::{collections::HashMap, env};
 use crate::reddit::{PostType, TopPostsTimePeriod};
 
 const CONFIG_PATH_ENV: &str = "CONFIG_PATH";
-const DEFAULT_LIMIT: u32 = 1;
-const DEFAULT_TIME_PERIOD: TopPostsTimePeriod = TopPostsTimePeriod::Day;
+pub const DEFAULT_LIMIT: u32 = 1;
+pub const DEFAULT_TIME_PERIOD: TopPostsTimePeriod = TopPostsTimePeriod::Day;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub telegram_bot_token: String,
     pub check_interval_secs: u64,
     pub skip_initial_send: bool,
+    pub default_limit: Option<u32>,
+    pub default_time: Option<TopPostsTimePeriod>,
+    pub default_filter: Option<PostType>,
 
     #[serde(deserialize_with = "deserialize_channel_config")]
     pub channels: ChannelsConfig,
@@ -21,10 +24,8 @@ pub struct Config {
 #[derive(Deserialize, Debug)]
 pub struct SubredditConfig {
     pub subreddit: String,
-    #[serde(default = "default_limit")]
-    pub limit: u32,
-    #[serde(default = "default_time_period")]
-    pub time: TopPostsTimePeriod,
+    pub limit: Option<u32>,
+    pub time: Option<TopPostsTimePeriod>,
     pub filter: Option<PostType>,
 }
 
@@ -50,12 +51,4 @@ pub fn read_config() -> Config {
             error!("failed to read config: {err}");
             std::process::exit(1);
         })
-}
-
-fn default_limit() -> u32 {
-    DEFAULT_LIMIT
-}
-
-fn default_time_period() -> TopPostsTimePeriod {
-    DEFAULT_TIME_PERIOD
 }

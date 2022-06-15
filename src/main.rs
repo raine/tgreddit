@@ -189,18 +189,23 @@ fn check_new_posts_for_channel(
 ) {
     for subreddit_config in subreddit_configs {
         let subreddit = &subreddit_config.subreddit;
-        let limit = subreddit_config.limit;
-        let time = &subreddit_config.time;
+        let limit = subreddit_config
+            .limit
+            .or(config.default_limit)
+            .unwrap_or(config::DEFAULT_LIMIT);
+        let time = subreddit_config
+            .time
+            .or(config.default_time)
+            .unwrap_or(config::DEFAULT_TIME_PERIOD);
+        let filter = subreddit_config.filter.or(config.default_filter);
 
-        match reddit::get_subreddit_top_posts(subreddit, limit, time) {
+        match reddit::get_subreddit_top_posts(subreddit, limit, &time) {
             Ok(posts) => {
                 debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
                 for post in posts {
                     debug!("got {post:?}");
 
-                    if subreddit_config.filter.is_some()
-                        && subreddit_config.filter.as_ref() != Some(&post.post_type)
-                    {
+                    if filter.is_some() && filter.as_ref() != Some(&post.post_type) {
                         debug!("filter set and post does not match filter, skipping");
                         continue;
                     }

@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum PostType {
     Image,
@@ -13,7 +13,7 @@ pub enum PostType {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum TopPostsTimePeriod {
     Hour,
