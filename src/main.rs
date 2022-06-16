@@ -230,10 +230,11 @@ fn check_new_posts_for_channel(
                         continue;
                     }
 
-                    match handle_new_post(tg_api, *chat_id, &post) {
-                        Ok(_) => seen_posts_cache.mark_seen(*chat_id, subreddit, &post.id),
-                        Err(e) => error!("failed to handle new post: {e}"),
+                    if let Err(e) = handle_new_post(tg_api, *chat_id, &post) {
+                        error!("failed to handle new post: {e}");
                     }
+
+                    seen_posts_cache.mark_seen(*chat_id, subreddit, &post.id);
                 }
 
                 seen_posts_cache.set_subreddit_initialized(*chat_id, subreddit);
