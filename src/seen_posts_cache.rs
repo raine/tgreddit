@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use lru::LruCache;
 
-const REMEMBERED_POSTS_COUNT: usize = 10;
+const REMEMBERED_POSTS_COUNT: usize = 30;
 
 #[derive(Debug)]
 pub struct SeenPostsCache {
