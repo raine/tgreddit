@@ -7,6 +7,7 @@ use signal_hook::{
     iterator::Signals,
 };
 use std::{
+    borrow::Cow,
     fs::File,
     io,
     path::{Path, PathBuf},
@@ -155,28 +156,25 @@ fn handle_new_self_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Resu
 
 fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
     info!("got new {post:#?}");
+    let mut post = Cow::Borrowed(post);
+
+    // Sometimes post_hint is not in top list response but exists when getting the link directly,
+    // but not always
     // TODO: It appears that post with is_gallery=true will never have post_hint set
-    match &post.post_hint {
-        None => {
-            let post = reddit::get_link(&post.id).unwrap();
-            match post.post_hint {
-                Some(_) => handle_new_post(tg_api, chat_id, &post),
-                None => {
-                    warn!("post still missing post_hint even when queried directly, skipping");
-                    Ok(())
-                }
-            }
+    if post.post_hint.is_none() {
+        info!("post missing post_hint, getting like directly");
+        post = Cow::Owned(reddit::get_link(&post.id).unwrap());
+    }
+
+    match post.post_type {
+        reddit::PostType::Image => handle_new_image_post(tg_api, chat_id, &post),
+        reddit::PostType::Video => handle_new_video_post(tg_api, chat_id, &post),
+        reddit::PostType::Link => handle_new_link_post(tg_api, chat_id, &post),
+        reddit::PostType::SelfText => handle_new_self_post(tg_api, chat_id, &post),
+        reddit::PostType::Unknown => {
+            warn!("unknown post type, skipping");
+            Ok(())
         }
-        Some(_) => match post.post_type {
-            reddit::PostType::Image => handle_new_image_post(tg_api, chat_id, post),
-            reddit::PostType::Video => handle_new_video_post(tg_api, chat_id, post),
-            reddit::PostType::Link => handle_new_link_post(tg_api, chat_id, post),
-            reddit::PostType::SelfText => handle_new_self_post(tg_api, chat_id, post),
-            reddit::PostType::Unknown => {
-                warn!("unknown post type, skipping");
-                Ok(())
-            }
-        },
     }
 }
 
