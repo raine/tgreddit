@@ -1,6 +1,5 @@
 use super::*;
 use anyhow::{Context, Result};
-use cached::proc_macro::cached;
 use log::info;
 use url::Url;
 
@@ -18,12 +17,6 @@ pub fn format_subreddit_url(subreddit: &str) -> String {
     format_url(&format!("/r/{subreddit}"))
 }
 
-#[cached(
-    result = true,
-    time = 60,
-    key = "String",
-    convert = r#"{ format!("{}:{}:{:?}", subreddit, limit, time) }"#
-)]
 pub fn get_subreddit_top_posts(
     subreddit: &str,
     limit: u32,
