@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use frankenstein::Api;
 use log::*;
-use seen_posts_cache::SeenPostsCache;
 use signal_hook::{
     consts::signal::{SIGINT, SIGTERM},
     iterator::Signals,
@@ -22,18 +21,21 @@ use url::Url;
 
 mod args;
 mod config;
+mod db;
 mod messages;
 mod reddit;
-mod seen_posts_cache;
 mod telegram;
 mod types;
 mod ytdlp;
 
+const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+
 fn main() -> Result<()> {
     env_logger::init();
     let config = config::read_config();
-    let tg_api = Api::new(&config.telegram_bot_token);
-    info!("starting with config: {config:?}");
+    let db = db::Database::open(&config)?;
+    let tg_api = Api::new(config.telegram_bot_token.expose_secret());
+    info!("starting with config: {config:#?}");
 
     // Any arguments are for things that help with debugging and development
     // Not optimized for usability.
@@ -49,8 +51,6 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
-
-    let mut seen_posts_cache = SeenPostsCache::new();
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let (send, recv) = mpsc::channel();
@@ -70,13 +70,7 @@ fn main() -> Result<()> {
 
     while !shutdown.load(Ordering::Acquire) {
         for (chat_id, subreddits) in &config.channels {
-            check_new_posts_for_channel(
-                &config,
-                &tg_api,
-                &mut seen_posts_cache,
-                chat_id,
-                subreddits,
-            )
+            check_new_posts_for_channel(&config, &db, &tg_api, chat_id, subreddits)
         }
 
         // Sleep that can be interrupted from the thread above
@@ -180,8 +174,8 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
 
 fn check_new_posts_for_channel(
     config: &config::Config,
+    db: &db::Database,
     tg_api: &Api,
-    seen_posts_cache: &mut SeenPostsCache,
     chat_id: &i64,
     subreddit_configs: &[config::SubredditConfig],
 ) {
@@ -208,23 +202,11 @@ fn check_new_posts_for_channel(
                         continue;
                     }
 
-                    if seen_posts_cache.is_seen_post(
-                        *chat_id,
-                        &subreddit_config.subreddit,
-                        &post.id,
-                    ) {
+                    if db
+                        .is_post_seen(*chat_id, &post)
+                        .expect("failed to query if post is seen")
+                    {
                         debug!("post already seen, skipping...");
-                        continue;
-                    }
-
-                    // First run should not send anything to telegram but the post should be marked
-                    // as seen, unless skip_initial_send is enabled
-                    let should_skip_initial_send = seen_posts_cache
-                        .is_uninitialized(*chat_id, subreddit)
-                        && config.skip_initial_send;
-
-                    if should_skip_initial_send {
-                        seen_posts_cache.mark_seen(*chat_id, subreddit, &post.id);
                         continue;
                     }
 
@@ -232,10 +214,9 @@ fn check_new_posts_for_channel(
                         error!("failed to handle new post: {e}");
                     }
 
-                    seen_posts_cache.mark_seen(*chat_id, subreddit, &post.id);
+                    db.mark_post_seen(*chat_id, &post)
+                        .expect("failed to query if post is seen");
                 }
-
-                seen_posts_cache.set_subreddit_initialized(*chat_id, subreddit);
             }
             Err(e) => {
                 error!("failed to get posts for {}: {e}", subreddit)
