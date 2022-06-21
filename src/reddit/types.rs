@@ -107,7 +107,9 @@ impl<'de> Deserialize<'de> for Post {
             PostType::Video
         } else if post_hint == Some("image") {
             PostType::Image
-        } else if post_hint == Some("link") {
+        // post_hint => rich:video can be a link to a youtube video, which are not worthwhile to
+        // download due to their length, though exceptions could be made for short (< 1min) videos
+        } else if post_hint == Some("link") || post_hint == Some("rich:video") {
             PostType::Link
         } else if helper.is_self {
             PostType::SelfText
