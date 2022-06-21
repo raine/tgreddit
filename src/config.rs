@@ -33,6 +33,7 @@ pub struct Config {
     pub db_path: PathBuf,
     pub telegram_bot_token: SecretString,
     pub check_interval_secs: u64,
+    #[serde(default = "default_skip_initial_send")]
     pub skip_initial_send: bool,
     pub default_limit: Option<u32>,
     pub default_time: Option<TopPostsTimePeriod>,
@@ -77,4 +78,8 @@ pub fn read_config() -> Config {
 fn default_db_path() -> PathBuf {
     let xdg_dirs = xdg::BaseDirectories::with_prefix(PKG_NAME).unwrap();
     xdg_dirs.place_state_file("data.db3").unwrap()
+}
+
+fn default_skip_initial_send() -> bool {
+    true
 }
