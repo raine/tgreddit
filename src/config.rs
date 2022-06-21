@@ -32,6 +32,8 @@ pub struct Config {
     #[serde(default = "default_db_path")]
     pub db_path: PathBuf,
     pub telegram_bot_token: SecretString,
+    #[serde(default = "default_keep_running")]
+    pub keep_running: bool,
     pub check_interval_secs: u64,
     #[serde(default = "default_skip_initial_send")]
     pub skip_initial_send: bool,
@@ -81,5 +83,9 @@ fn default_db_path() -> PathBuf {
 }
 
 fn default_skip_initial_send() -> bool {
+    true
+}
+
+fn default_keep_running() -> bool {
     true
 }

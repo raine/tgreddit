@@ -73,6 +73,10 @@ fn main() -> Result<()> {
             check_new_posts_for_channel(&config, &db, &tg_api, *chat_id, subreddits)
         }
 
+        if !config.keep_running {
+            break;
+        }
+
         // Sleep that can be interrupted from the thread above
         let _r = recv.recv_timeout(Duration::from_secs(config.check_interval_secs));
     }
