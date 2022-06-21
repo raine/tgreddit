@@ -5,12 +5,14 @@ use rusqlite_migration::{Migrations, M};
 use std::path::Path;
 
 const MIGRATIONS: &[&str] = &[r"
-create table post(
-    post_id     text not null,
-    chat_id     integer not null,
-    seen_at     text not null,
-    primary key (post_id, chat_id)
-)"];
+    create table post(
+        post_id     text not null,
+        chat_id     integer not null,
+        subreddit   text not null,
+        seen_at     text not null,
+        primary key (post_id, chat_id)
+    ) strict
+"];
 
 #[derive(Debug)]
 pub struct Database {
@@ -44,13 +46,14 @@ impl Database {
     pub fn mark_post_seen(&self, chat_id: i64, post: &Post) -> Result<()> {
         let mut stmt = self.conn.prepare(
             "
-            insert into post (post_id, chat_id, seen_at)
-            values (:post_id, :chat_id, :seen_at)
+            insert into post (post_id, chat_id, subreddit, seen_at)
+            values (:post_id, :chat_id, :subreddit, :seen_at)
             ",
         )?;
         stmt.execute(named_params! {
             ":post_id": post.id,
             ":chat_id": chat_id,
+            ":subreddit": &post.subreddit,
             ":seen_at": chrono::Utc::now()
         })
         .context("could not mark post seen")?;
