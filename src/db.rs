@@ -80,6 +80,27 @@ impl Database {
         )
         .map_err(anyhow::Error::from)
     }
+
+    pub fn existing_posts_for_subreddit(&self, chat_id: i64, subreddit: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(
+            "
+            select exists(
+                select 1
+                  from post
+                 where chat_id = :chat_id and subreddit = :subreddit
+            );
+            ",
+        )?;
+
+        stmt.query_row(
+            named_params! {
+                ":chat_id": chat_id,
+                ":subreddit": subreddit,
+            },
+            |row| row.get(0),
+        )
+        .map_err(anyhow::Error::from)
+    }
 }
 
 #[cfg(test)]
@@ -106,7 +127,9 @@ mod tests {
             crosspost_parent_list: None,
         };
 
+        assert!(!db.existing_posts_for_subreddit(1, "absoluteunit").unwrap());
         db.mark_post_seen(1, &post).unwrap();
         assert!(db.is_post_seen(1, &post).unwrap());
+        assert!(db.existing_posts_for_subreddit(1, "absoluteunit").unwrap());
     }
 }

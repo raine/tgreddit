@@ -210,12 +210,20 @@ fn check_new_posts_for_channel(
                         continue;
                     }
 
-                    if let Err(e) = handle_new_post(tg_api, *chat_id, &post) {
-                        error!("failed to handle new post: {e}");
+                    // First run should not send anything to telegram but the post should be marked
+                    // as seen, unless skip_initial_send is enabled
+                    let is_new_subreddit = !db
+                        .existing_posts_for_subreddit(*chat_id, subreddit)
+                        .expect("failed to query if subreddit has existing posts");
+                    let only_mark_seen = is_new_subreddit && config.skip_initial_send;
+                    if !only_mark_seen {
+                        if let Err(e) = handle_new_post(tg_api, *chat_id, &post) {
+                            error!("failed to handle new post: {e}");
+                        }
                     }
 
                     db.mark_post_seen(*chat_id, &post)
-                        .expect("failed to query if post is seen");
+                        .expect("failed to mark post seen");
                 }
             }
             Err(e) => {
