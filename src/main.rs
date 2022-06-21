@@ -70,7 +70,7 @@ fn main() -> Result<()> {
 
     while !shutdown.load(Ordering::Acquire) {
         for (chat_id, subreddits) in &config.channels {
-            check_new_posts_for_channel(&config, &db, &tg_api, chat_id, subreddits)
+            check_new_posts_for_channel(&config, &db, &tg_api, *chat_id, subreddits)
         }
 
         // Sleep that can be interrupted from the thread above
@@ -172,63 +172,83 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
     }
 }
 
+fn check_post_newness(
+    config: &config::Config,
+    db: &db::Database,
+    tg_api: &Api,
+    chat_id: i64,
+    filter: Option<reddit::PostType>,
+    post: &reddit::Post,
+) {
+    if filter.is_some() && filter.as_ref() != Some(&post.post_type) {
+        debug!("filter set and post does not match filter, skipping");
+        return;
+    }
+
+    if db
+        .is_post_seen(chat_id, post)
+        .expect("failed to query if post is seen")
+    {
+        debug!("post already seen, skipping...");
+        return;
+    }
+
+    // First run should not send anything to telegram but the post should be marked
+    // as seen, unless skip_initial_send is enabled
+    let is_new_subreddit = !db
+        .existing_posts_for_subreddit(chat_id, &post.subreddit)
+        .expect("failed to query if subreddit has existing posts");
+    let only_mark_seen = is_new_subreddit && config.skip_initial_send;
+    if !only_mark_seen {
+        if let Err(e) = handle_new_post(tg_api, chat_id, post) {
+            error!("failed to handle new post: {e}");
+        }
+    }
+
+    db.mark_post_seen(chat_id, post)
+        .expect("failed to mark post seen");
+}
+
+fn check_new_posts_for_subreddit(
+    config: &config::Config,
+    db: &db::Database,
+    tg_api: &Api,
+    chat_id: i64,
+    subreddit_config: &config::SubredditConfig,
+) {
+    let subreddit = &subreddit_config.subreddit;
+    let limit = subreddit_config
+        .limit
+        .or(config.default_limit)
+        .unwrap_or(config::DEFAULT_LIMIT);
+    let time = subreddit_config
+        .time
+        .or(config.default_time)
+        .unwrap_or(config::DEFAULT_TIME_PERIOD);
+    let filter = subreddit_config.filter.or(config.default_filter);
+
+    match reddit::get_subreddit_top_posts(subreddit, limit, &time) {
+        Ok(posts) => {
+            debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
+            for post in posts {
+                debug!("got {post:?}");
+                check_post_newness(config, db, tg_api, chat_id, filter, &post)
+            }
+        }
+        Err(e) => {
+            error!("failed to get posts for {}: {e}", subreddit)
+        }
+    }
+}
+
 fn check_new_posts_for_channel(
     config: &config::Config,
     db: &db::Database,
     tg_api: &Api,
-    chat_id: &i64,
+    chat_id: i64,
     subreddit_configs: &[config::SubredditConfig],
 ) {
     for subreddit_config in subreddit_configs {
-        let subreddit = &subreddit_config.subreddit;
-        let limit = subreddit_config
-            .limit
-            .or(config.default_limit)
-            .unwrap_or(config::DEFAULT_LIMIT);
-        let time = subreddit_config
-            .time
-            .or(config.default_time)
-            .unwrap_or(config::DEFAULT_TIME_PERIOD);
-        let filter = subreddit_config.filter.or(config.default_filter);
-
-        match reddit::get_subreddit_top_posts(subreddit, limit, &time) {
-            Ok(posts) => {
-                debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
-                for post in posts {
-                    debug!("got {post:?}");
-
-                    if filter.is_some() && filter.as_ref() != Some(&post.post_type) {
-                        debug!("filter set and post does not match filter, skipping");
-                        continue;
-                    }
-
-                    if db
-                        .is_post_seen(*chat_id, &post)
-                        .expect("failed to query if post is seen")
-                    {
-                        debug!("post already seen, skipping...");
-                        continue;
-                    }
-
-                    // First run should not send anything to telegram but the post should be marked
-                    // as seen, unless skip_initial_send is enabled
-                    let is_new_subreddit = !db
-                        .existing_posts_for_subreddit(*chat_id, subreddit)
-                        .expect("failed to query if subreddit has existing posts");
-                    let only_mark_seen = is_new_subreddit && config.skip_initial_send;
-                    if !only_mark_seen {
-                        if let Err(e) = handle_new_post(tg_api, *chat_id, &post) {
-                            error!("failed to handle new post: {e}");
-                        }
-                    }
-
-                    db.mark_post_seen(*chat_id, &post)
-                        .expect("failed to mark post seen");
-                }
-            }
-            Err(e) => {
-                error!("failed to get posts for {}: {e}", subreddit)
-            }
-        }
+        check_new_posts_for_subreddit(config, db, tg_api, chat_id, subreddit_config)
     }
 }
