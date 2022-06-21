@@ -177,12 +177,12 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
 }
 
 fn check_post_newness(
-    config: &config::Config,
     db: &db::Database,
     tg_api: &Api,
     chat_id: i64,
     filter: Option<reddit::PostType>,
     post: &reddit::Post,
+    only_mark_seen: bool,
 ) {
     if filter.is_some() && filter.as_ref() != Some(&post.post_type) {
         debug!("filter set and post does not match filter, skipping");
@@ -197,12 +197,6 @@ fn check_post_newness(
         return;
     }
 
-    // First run should not send anything to telegram but the post should be marked
-    // as seen, unless skip_initial_send is enabled
-    let is_new_subreddit = !db
-        .existing_posts_for_subreddit(chat_id, &post.subreddit)
-        .expect("failed to query if subreddit has existing posts");
-    let only_mark_seen = is_new_subreddit && config.skip_initial_send;
     if !only_mark_seen {
         if let Err(e) = handle_new_post(tg_api, chat_id, post) {
             error!("failed to handle new post: {e}");
@@ -234,9 +228,17 @@ fn check_new_posts_for_subreddit(
     match reddit::get_subreddit_top_posts(subreddit, limit, &time) {
         Ok(posts) => {
             debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
+
+            // First run should not send anything to telegram but the post should be marked
+            // as seen, unless skip_initial_send is enabled
+            let is_new_subreddit = !db
+                .existing_posts_for_subreddit(chat_id, subreddit)
+                .expect("failed to query if subreddit has existing posts");
+            let only_mark_seen = is_new_subreddit && config.skip_initial_send;
+
             for post in posts {
                 debug!("got {post:?}");
-                check_post_newness(config, db, tg_api, chat_id, filter, &post)
+                check_post_newness(db, tg_api, chat_id, filter, &post, only_mark_seen);
             }
         }
         Err(e) => {
