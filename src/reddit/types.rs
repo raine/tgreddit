@@ -136,6 +136,10 @@ impl<'de> Deserialize<'de> for Post {
 
 impl Post {
     pub(crate) fn format_permalink_url(&self) -> String {
-        format_url(&self.permalink)
+        format_url_from_path(&self.permalink)
+    }
+
+    pub(crate) fn format_old_permalink_url(&self) -> String {
+        to_old_reddit_url(&format_url_from_path(&self.permalink))
     }
 }

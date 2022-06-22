@@ -9,12 +9,19 @@ fn get_base_url() -> Url {
     Url::parse(REDDIT_BASE_URL).unwrap()
 }
 
-pub fn format_url(path: &str) -> String {
+pub fn format_url_from_path(path: &str) -> String {
     format!("{REDDIT_BASE_URL}{path}")
 }
 
+pub fn to_old_reddit_url(url: &str) -> String {
+    // If this fails it's bug
+    let mut url = Url::parse(url).unwrap();
+    url.set_host(Some("old.reddit.com")).unwrap();
+    url.to_string()
+}
+
 pub fn format_subreddit_url(subreddit: &str) -> String {
-    format_url(&format!("/r/{subreddit}"))
+    format_url_from_path(&format!("/r/{subreddit}"))
 }
 
 pub fn get_subreddit_top_posts(

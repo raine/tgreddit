@@ -15,18 +15,23 @@ fn format_subreddit_link(subreddit: &str) -> String {
     )
 }
 
-pub fn format_media_caption_html(post: &reddit::Post) -> String {
-    let title = &post.title;
+pub fn format_meta_html(post: &reddit::Post) -> String {
     let subreddit_link = format_subreddit_link(&post.subreddit);
     let comments_link = format_html_anchor(&post.format_permalink_url(), "comments");
-    format!("{title}\n{subreddit_link} [{comments_link}]")
+    let old_comments_link = format_html_anchor(&post.format_old_permalink_url(), "old");
+    format!("{subreddit_link} [{comments_link}, {old_comments_link}]")
+}
+
+pub fn format_media_caption_html(post: &reddit::Post) -> String {
+    let title = &post.title;
+    let meta = format_meta_html(post);
+    format!("{title}\n{meta}")
 }
 
 pub fn format_link_message_html(post: &reddit::Post) -> String {
     let title = format_html_anchor(&post.url, &post.title);
-    let subreddit_link = format_subreddit_link(&post.subreddit);
-    let comments_link = format_html_anchor(&post.format_permalink_url(), "comments");
-    format!("{title}\n{subreddit_link} [{comments_link}]")
+    let meta = format_meta_html(post);
+    format!("{title}\n{meta}")
 }
 
 pub fn format_self_message_html(post: &reddit::Post) -> String {
