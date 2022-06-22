@@ -17,13 +17,6 @@ $ cargo install tgreddit
 
 Depends on `yt-dlp` and `ffmpeg`.
 
-## docker image
-
-There's a prebuilt Docker image with dependencies included at
-[rainevi/tgreddit](https://hub.docker.com/repository/docker/rainevi/tgreddit).
-Of course, you may also build your own using from the
-[Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
-
 ## configuration
 
 ### env vars
@@ -40,7 +33,7 @@ Example config without comments:
 # Optional. Defaults to $HOME/.local/state/tgreddit/data.db3.
 db_path = "/path/to/data.db3"
 
-# Token of telegram bot -- you get this from @botfather
+# Token of your Telegram bot - you get this from @botfather.
 telegram_bot_token = "..."
 
 # Keep the program running after checking configured subreddits for new posts,
@@ -48,7 +41,8 @@ telegram_bot_token = "..."
 # the program with crontab.
 keep_running = true
 
-# How often to query each configured subreddit for new posts
+# How often to query each configured subreddit for new posts. Applies only if
+# keep_running is enabled.
 check_interval_secs = 600
 
 # Whether posts seen on the first check of a new subreddit are considered new
@@ -87,6 +81,13 @@ default_time = "day"
 Perhaps the simplest way to determine a Telegram channel's ID is to open the
 channel in [Telegram Web client][telegram-web] and observing the numeric value
 in page URL.
+
+## docker image
+
+There's a prebuilt Docker image with dependencies included at
+[rainevi/tgreddit](https://hub.docker.com/repository/docker/rainevi/tgreddit).
+Of course, you may also build your own using from the
+[Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
 
 [yt-dlp]: https://github.com/yt-dlp/yt-dlp
 [telegram-web]: https://web.telegram.org/
