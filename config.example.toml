@@ -1,17 +1,6 @@
 db_path = "/data/data.db3"
-keep_running = true
 telegram_bot_token = "xxx"
 check_interval_secs = 600
 skip_initial_send = true
 default_limit = 5
 default_time = "week"
-
-[channels]
--1001265812863 = [
-  {subreddit="AnimalsBeingDerps"},
-  {subreddit="AnimalsBeingJerks"},
-  {subreddit="AnimalsBeingBros"},
-  {subreddit="WhatsWrongWithYourDog"},
-  {subreddit="StartledCats"},
-  {subreddit="FunnyAnimals"},
-]

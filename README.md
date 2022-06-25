@@ -36,11 +36,6 @@ db_path = "/path/to/data.db3"
 # Token of your Telegram bot - you get this from @botfather.
 telegram_bot_token = "..."
 
-# Keep the program running after checking configured subreddits for new posts,
-# and check again periodically. Setting to `false` would be useful when running
-# the program with crontab.
-keep_running = true
-
 # How often to query each configured subreddit for new posts. Applies only if
 # keep_running is enabled.
 check_interval_secs = 600
@@ -58,24 +53,6 @@ default_limit = 1
 # Set default time period of top list fetched. Used when not specified for a
 # subreddit. String and one of: hour, day, week, month, year, all
 default_time = "day"
-
-# A map value with the key being the Telegram chat id (channel, or your user id
-# for DM) and the value a list of subreddit configurations.
-[channels]
-100000 = [
-  # Fetch the top 5 posts of the last week for /r/rust
-  {subreddit="rust", limit=5, time="week"},
-
-  # Fetch the top post of the last month for /r/golang
-  {subreddit="golang", limit=1, time="month"},
-
-  # Query /r/AnimalsBeingJerks and use the default values for `limit` and
-  # `time` from above. Consider only videos.
-  {subreddit="AnimalsBeingJerks", filter="video"},
-]
-100001 = [
-  # etc.
-]
 ```
 
 Perhaps the simplest way to determine a Telegram channel's ID is to open the

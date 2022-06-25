@@ -1,10 +1,13 @@
+use crate::types::*;
 use anyhow::{Context, Result};
-use frankenstein::Api;
 use log::*;
+use reddit::PostType;
+use reddit::TopPostsTimePeriod;
 use signal_hook::{
     consts::signal::{SIGINT, SIGTERM},
     iterator::Signals,
 };
+use std::string::ToString;
 use std::{
     borrow::Cow,
     fs::File,
@@ -12,30 +15,40 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc,
+        Arc,
     },
     time::Duration,
 };
+use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
+use teloxide::prelude::*;
+use teloxide::types::InputFile;
 use tempdir::TempDir;
+use tokio::sync::broadcast;
 use url::Url;
 
 mod args;
+mod bot;
 mod config;
 mod db;
 mod messages;
 mod reddit;
-mod telegram;
 mod types;
 mod ytdlp;
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     env_logger::init();
-    let config = config::read_config();
-    let db = db::Database::open(&config)?;
-    let tg_api = Api::new(config.telegram_bot_token.expose_secret());
+    let config = Arc::new(config::read_config());
     info!("starting with config: {config:#?}");
+    let mut db = db::Database::open(&config)?;
+    db.migrate()?;
+    drop(db);
+
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let bot = bot::MyBot::new(config.clone()).await?;
 
     // Any arguments are for things that help with debugging and development
     // Not optimized for usability.
@@ -47,60 +60,54 @@ fn main() -> Result<()> {
         let post = reddit::get_link(&post_id).unwrap();
         info!("{:#?}", post);
         if let Some(chat_id) = opts.opt_str("chat-id") {
-            return handle_new_post(&tg_api, chat_id.parse().unwrap(), &post);
+            return handle_new_post(&bot.tg, chat_id.parse().unwrap(), &post).await;
         }
         return Ok(());
     }
 
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let (send, recv) = mpsc::channel();
+    let sub_check_loop_handle = {
+        let shutdown = shutdown.clone();
+        let tg = bot.tg.clone();
+        tokio::task::spawn(async move {
+            while !shutdown.load(Ordering::Acquire) {
+                check_new_posts(&config, &tg).await.unwrap_or_else(|err| {
+                    error!("failed to check for new posts: {err}");
+                });
+
+                tokio::select! {
+                   _ = tokio::time::sleep(Duration::from_secs(config.check_interval_secs)) => {}
+                   _ = shutdown_rx.recv() => {
+                       break
+                   }
+                }
+            }
+        })
+    };
+    let (bot_handle, bot_shutdown_token) = bot.spawn();
 
     {
         let shutdown = shutdown.clone();
         std::thread::spawn(move || {
             let mut forward_signals =
-                Signals::new(&[SIGINT, SIGTERM]).expect("Unable to watch for signals");
+                Signals::new(&[SIGINT, SIGTERM]).expect("unable to watch for signals");
 
-            for _signal in forward_signals.forever() {
+            for signal in forward_signals.forever() {
+                info!("got signal {signal}, shutting down...");
                 shutdown.swap(true, Ordering::Relaxed);
-                send.send(()).unwrap();
+                let _res = bot_shutdown_token.shutdown();
+                let _res = shutdown_tx.send(()).unwrap_or_else(|_| {
+                    // Makes the second Ctrl-C exit instantly
+                    std::process::exit(0);
+                });
             }
         });
     }
 
-    while !shutdown.load(Ordering::Acquire) {
-        for (chat_id, subreddits) in &config.channels {
-            check_new_posts_for_channel(&config, &db, &tg_api, *chat_id, subreddits)
-        }
-
-        if !config.keep_running {
-            break;
-        }
-
-        // Sleep that can be interrupted from the thread above
-        let _r = recv.recv_timeout(Duration::from_secs(config.check_interval_secs));
+    if let Err(err) = tokio::try_join!(bot_handle, sub_check_loop_handle) {
+        panic!("{err}")
     }
 
     Ok(())
-}
-
-fn handle_new_video_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    match ytdlp::download(&post.url) {
-        Ok(video) => {
-            info!("got a video: {video:?}");
-            let caption = messages::format_media_caption_html(post);
-            telegram::upload_video(tg_api, chat_id, &video, &caption).map(|_| ())?;
-            info!(
-                "video uploaded post_id={} chat_id={chat_id} video={video:?}",
-                post.id
-            );
-            Ok(())
-        }
-        Err(e) => {
-            error!("failed to download video: {e}");
-            Err(e)
-        }
-    }
 }
 
 /// Downloads url to a file and returns the path along with handle to temp dir in which the file is.
@@ -122,12 +129,38 @@ fn download_url(url: &str) -> Result<(PathBuf, TempDir)> {
     Ok((tmp_path, tmp_dir))
 }
 
-fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_new_video_post(
+    tg: &AutoSend<Bot>,
+    chat_id: i64,
+    post: &reddit::Post,
+) -> Result<()> {
+    let video = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
+    info!("got a video: {video:?}");
+    let caption = messages::format_media_caption_html(post);
+    tg.send_video(ChatId(chat_id), InputFile::file(&video.path))
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .caption(&caption)
+        .await?;
+    info!(
+        "video uploaded post_id={} chat_id={chat_id} video={video:?}",
+        post.id
+    );
+    Ok(())
+}
+
+async fn handle_new_image_post(
+    tg: &AutoSend<Bot>,
+    chat_id: i64,
+    post: &reddit::Post,
+) -> Result<()> {
     match download_url(&post.url) {
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
             let caption = messages::format_media_caption_html(post);
-            telegram::upload_image(tg_api, chat_id, path, &caption).map(|_| ())?;
+            tg.send_photo(ChatId(chat_id), InputFile::file(path))
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .caption(&caption)
+                .await?;
             info!("image uploaded post_id={} chat_id={chat_id}", post.id);
             Ok(())
         }
@@ -138,21 +171,27 @@ fn handle_new_image_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Res
     }
 }
 
-fn handle_new_link_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_new_link_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) -> Result<()> {
     let message_html = messages::format_link_message_html(post);
-    telegram::send_message(tg_api, chat_id, &message_html, false).map(|_| ())?;
+    tg.send_message(ChatId(chat_id), message_html)
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .disable_web_page_preview(false)
+        .await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
 }
 
-fn handle_new_self_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_new_self_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) -> Result<()> {
     let message_html = messages::format_self_message_html(post);
-    telegram::send_message(tg_api, chat_id, &message_html, true).map(|_| ())?;
+    tg.send_message(ChatId(chat_id), message_html)
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .disable_web_page_preview(true)
+        .await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
 }
 
-fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_new_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) -> Result<()> {
     info!("got new {post:#?}");
     let mut post = Cow::Borrowed(post);
 
@@ -165,10 +204,10 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
     }
 
     match post.post_type {
-        reddit::PostType::Image => handle_new_image_post(tg_api, chat_id, &post),
-        reddit::PostType::Video => handle_new_video_post(tg_api, chat_id, &post),
-        reddit::PostType::Link => handle_new_link_post(tg_api, chat_id, &post),
-        reddit::PostType::SelfText => handle_new_self_post(tg_api, chat_id, &post),
+        reddit::PostType::Image => handle_new_image_post(tg, chat_id, &post).await,
+        reddit::PostType::Video => handle_new_video_post(tg, chat_id, &post).await,
+        reddit::PostType::Link => handle_new_link_post(tg, chat_id, &post).await,
+        reddit::PostType::SelfText => handle_new_self_post(tg, chat_id, &post).await,
         reddit::PostType::Unknown => {
             warn!("unknown post type, skipping");
             Ok(())
@@ -176,17 +215,18 @@ fn handle_new_post(tg_api: &Api, chat_id: i64, post: &reddit::Post) -> Result<()
     }
 }
 
-fn check_post_newness(
-    db: &db::Database,
-    tg_api: &Api,
+async fn check_post_newness(
+    config: &config::Config,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     filter: Option<reddit::PostType>,
     post: &reddit::Post,
     only_mark_seen: bool,
-) {
+) -> Result<()> {
+    let db = db::Database::open(config)?;
     if filter.is_some() && filter.as_ref() != Some(&post.post_type) {
         debug!("filter set and post does not match filter, skipping");
-        return;
+        return Ok(());
     }
 
     if db
@@ -194,36 +234,55 @@ fn check_post_newness(
         .expect("failed to query if post is seen")
     {
         debug!("post already seen, skipping...");
-        return;
+        return Ok(());
     }
 
     if !only_mark_seen {
-        if let Err(e) = handle_new_post(tg_api, chat_id, post) {
+        // Intentionally marking post as seen if handling it fails. It's preferable to not have it
+        // fail continuously.
+        if let Err(e) = handle_new_post(tg, chat_id, post).await {
             error!("failed to handle new post: {e}");
         }
     }
 
-    db.mark_post_seen(chat_id, post)
-        .expect("failed to mark post seen");
+    db.mark_post_seen(chat_id, post)?;
+    info!("marked post seen: {}", post.id);
+
+    Ok(())
 }
 
-fn check_new_posts_for_subreddit(
+async fn check_new_posts(config: &config::Config, tg: &AutoSend<Bot>) -> Result<()> {
+    info!("checking subscriptions for new posts");
+    let db = db::Database::open(config)?;
+    let subs = db.get_all_subscriptions()?;
+    for sub in subs {
+        check_new_posts_for_subscription(config, tg, &sub)
+            .await
+            .unwrap_or_else(|err| {
+                error!("failed to check subscription for new posts: {err}");
+            });
+    }
+
+    Ok(())
+}
+
+async fn check_new_posts_for_subscription(
     config: &config::Config,
-    db: &db::Database,
-    tg_api: &Api,
-    chat_id: i64,
-    subreddit_config: &config::SubredditConfig,
-) {
-    let subreddit = &subreddit_config.subreddit;
-    let limit = subreddit_config
+    tg: &AutoSend<Bot>,
+    sub: &Subscription,
+) -> Result<()> {
+    let db = db::Database::open(config)?;
+    let subreddit = &sub.subreddit;
+    let limit = sub
         .limit
         .or(config.default_limit)
         .unwrap_or(config::DEFAULT_LIMIT);
-    let time = subreddit_config
+    let time = sub
         .time
         .or(config.default_time)
         .unwrap_or(config::DEFAULT_TIME_PERIOD);
-    let filter = subreddit_config.filter.or(config.default_filter);
+    let filter = sub.filter.or(config.default_filter);
+    let chat_id = sub.chat_id;
 
     match reddit::get_subreddit_top_posts(subreddit, limit, &time) {
         Ok(posts) => {
@@ -238,23 +297,17 @@ fn check_new_posts_for_subreddit(
 
             for post in posts {
                 debug!("got {post:?}");
-                check_post_newness(db, tg_api, chat_id, filter, &post, only_mark_seen);
+                check_post_newness(config, tg, chat_id, filter, &post, only_mark_seen)
+                    .await
+                    .unwrap_or_else(|err| {
+                        error!("failed to check post newness: {err}");
+                    });
             }
         }
         Err(e) => {
             error!("failed to get posts for {}: {e}", subreddit)
         }
-    }
-}
+    };
 
-fn check_new_posts_for_channel(
-    config: &config::Config,
-    db: &db::Database,
-    tg_api: &Api,
-    chat_id: i64,
-    subreddit_configs: &[config::SubredditConfig],
-) {
-    for subreddit_config in subreddit_configs {
-        check_new_posts_for_subreddit(config, db, tg_api, chat_id, subreddit_config)
-    }
+    Ok(())
 }

@@ -1,7 +1,10 @@
 use super::*;
 use anyhow::{Context, Result};
 use log::info;
+use thiserror::Error;
 use url::Url;
+
+// NOTE: Using a blocking http client for historical reasons. Maybe use async one in future.
 
 static REDDIT_BASE_URL: &str = "https://www.reddit.com";
 
@@ -53,4 +56,32 @@ pub fn get_link(link_id: &str) -> Result<Post> {
         .map(|e| e.data)
         .next()
         .context("no post in response")
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Error, Debug)]
+pub enum SubredditAboutError {
+    #[error("no such subreddit")]
+    NoSuchSubreddit,
+    #[error(transparent)]
+    Ureq(#[from] ureq::Error),
+    #[error(transparent)]
+    UrlParseError(#[from] url::ParseError),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+}
+
+pub fn get_subreddit_about(subreddit: &str) -> Result<SubredditAbout, SubredditAboutError> {
+    info!("getting subreddit about for /r/{subreddit}");
+    let agent = ureq::AgentBuilder::new().redirects(0).build();
+    let url = get_base_url().join(&format!("/r/{subreddit}/about.json"))?;
+    let req = agent.get(&url.to_string());
+    let res = req.call()?;
+    match res.status() {
+        302 => Err(SubredditAboutError::NoSuchSubreddit),
+        _ => {
+            let data = res.into_json::<SubredditAboutResponse>()?.data;
+            Ok(data)
+        }
+    }
 }

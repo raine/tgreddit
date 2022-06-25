@@ -1,7 +1,7 @@
 use log::error;
 use secrecy::{ExposeSecret, Secret};
-use serde::{Deserialize, Deserializer};
-use std::{collections::HashMap, env, path::PathBuf};
+use serde::Deserialize;
+use std::{env, path::PathBuf};
 
 use crate::{
     reddit::{PostType, TopPostsTimePeriod},
@@ -32,38 +32,12 @@ pub struct Config {
     #[serde(default = "default_db_path")]
     pub db_path: PathBuf,
     pub telegram_bot_token: SecretString,
-    #[serde(default = "default_keep_running")]
-    pub keep_running: bool,
     pub check_interval_secs: u64,
     #[serde(default = "default_skip_initial_send")]
     pub skip_initial_send: bool,
     pub default_limit: Option<u32>,
     pub default_time: Option<TopPostsTimePeriod>,
     pub default_filter: Option<PostType>,
-
-    #[serde(deserialize_with = "deserialize_channel_config")]
-    pub channels: ChannelsConfig,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct SubredditConfig {
-    pub subreddit: String,
-    pub limit: Option<u32>,
-    pub time: Option<TopPostsTimePeriod>,
-    pub filter: Option<PostType>,
-}
-
-pub type ChannelsConfig = HashMap<i64, Vec<SubredditConfig>>;
-
-fn deserialize_channel_config<'de, D>(deserializer: D) -> Result<ChannelsConfig, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let str_map: HashMap<&str, Vec<SubredditConfig>> = HashMap::deserialize(deserializer)?;
-    Ok(str_map
-        .into_iter()
-        .map(|(key, val)| (key.parse::<i64>().unwrap(), val))
-        .collect())
 }
 
 pub fn read_config() -> Config {
@@ -83,9 +57,5 @@ fn default_db_path() -> PathBuf {
 }
 
 fn default_skip_initial_send() -> bool {
-    true
-}
-
-fn default_keep_running() -> bool {
     true
 }

@@ -1,10 +1,12 @@
 use super::*;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
+use strum_macros::{Display, EnumString};
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy)]
+#[derive(Display, Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy, EnumString)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum PostType {
     Image,
     Video,
@@ -13,8 +15,9 @@ pub enum PostType {
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy)]
+#[derive(Display, Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy, EnumString)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum TopPostsTimePeriod {
     Hour,
     Day,
@@ -142,4 +145,15 @@ impl Post {
     pub(crate) fn format_old_permalink_url(&self) -> String {
         to_old_reddit_url(&format_url_from_path(&self.permalink))
     }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SubredditAboutResponse {
+    pub data: SubredditAbout,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SubredditAbout {
+    pub display_name: String,
+    pub display_name_prefixed: String,
 }
