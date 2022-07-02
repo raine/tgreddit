@@ -17,9 +17,9 @@ pub enum Command {
         description = "subscribe to subreddit's top posts",
         parse_with = "parse_subscribe_message"
     )]
-    Subscribe(SubscriptionArgs),
+    Sub(SubscriptionArgs),
     #[command(description = "unsubscribe from subreddit's top posts")]
-    Unsubscribe(String),
+    Unsub(String),
 }
 
 pub struct MyBot {
@@ -81,7 +81,7 @@ pub async fn handle_command(
             tg.send_message(message.chat.id, Command::descriptions().to_string())
                 .await?;
         }
-        Command::Subscribe(args) => {
+        Command::Sub(args) => {
             let db = db::Database::open(&config)?;
             let chat_id = message.chat.id.0;
             let subreddit_about = reddit::get_subreddit_about(&args.subreddit);
@@ -105,7 +105,7 @@ pub async fn handle_command(
                 }
             }
         }
-        Command::Unsubscribe(subreddit) => {
+        Command::Unsub(subreddit) => {
             let db = db::Database::open(&config)?;
             let chat_id = message.chat.id.0;
             let subreddit = subreddit.replace("r/", "");
