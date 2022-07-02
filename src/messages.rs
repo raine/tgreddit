@@ -41,7 +41,11 @@ pub fn format_self_message_html(post: &reddit::Post) -> String {
 }
 
 pub fn format_subscription_list(post: &[Subscription]) -> String {
-    post.iter().map(|sub| sub.subreddit.to_owned()).join("\n")
+    if post.is_empty() {
+        "No subscriptions".to_owned()
+    } else {
+        post.iter().map(|sub| sub.subreddit.to_owned()).join("\n")
+    }
 }
 
 #[cfg(test)]
