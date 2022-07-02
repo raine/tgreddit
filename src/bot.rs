@@ -33,9 +33,13 @@ impl MyBot {
         tg.set_my_commands(Command::bot_commands()).await?;
 
         let handler = Update::filter_message().branch(
-            dptree::entry()
-                .filter_command::<Command>()
-                .endpoint(handle_command),
+            dptree::filter(|msg: Message, config: Arc<config::Config>| {
+                msg.from()
+                    .map(|user| config.authorized_user_ids.contains(&user.id.0))
+                    .unwrap_or_default()
+            })
+            .filter_command::<Command>()
+            .endpoint(handle_command),
         );
 
         let dispatcher = Dispatcher::builder(tg.clone(), handler)

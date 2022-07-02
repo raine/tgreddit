@@ -29,6 +29,7 @@ impl Default for SecretString {
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Config {
+    pub authorized_user_ids: Vec<u64>,
     #[serde(default = "default_db_path")]
     pub db_path: PathBuf,
     pub telegram_bot_token: SecretString,
