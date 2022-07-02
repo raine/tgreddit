@@ -1,6 +1,6 @@
 # tgreddit
 
-Get a feed of the best stuff in Reddit to Telegram.
+Get a feed of your favorite subreddits to Telegram.
 
 The killer feature: No need to visit Reddit, as all media is embedded thanks to
 [yt-dlp](yt-dlp) and Telegram's excellent media support.
@@ -15,7 +15,32 @@ $ cargo install tgreddit
 
 ### requirements
 
-Depends on `yt-dlp` and `ffmpeg`.
+Depends on [yt-dlp](yt-dlp) (and for good results, yt-dlp requires ffmpeg).
+
+## bot commands
+
+### `/sub <subreddit> [limit=<limit>] [time=<time>] [filter=<filter>]`
+
+Add a subscription to subreddit's top posts with optional options. Subscriptions
+are conversation specific, and may be added in channels where the bot is
+participating or in private chats with the bot.
+
+If the options are not given, when checking for new posts, the program will
+default to configuration in config.toml, if any.
+
+Example: `/sub AnimalsBeingJerks limit=5 time=week filter=video`
+
+Explanation: Subscribe to top posts in r/AnimalsBeingJerks so that the top 5
+posts of the weekly top list are considered. Whenever a new post appears among
+those top 5 posts, they will be posted in the conversation.
+
+### `/unsub <subreddit>`
+
+Remove a subscription from the current conversation.
+
+### `/listsubs`
+
+List all subreddit subscriptions for the current conversation.
 
 ## configuration
 
@@ -33,6 +58,11 @@ Example config without comments:
 # Optional. Defaults to $HOME/.local/state/tgreddit/data.db3.
 db_path = "/path/to/data.db3"
 
+# List of Telegram user ids that can use the commands provided by the bot.
+authorized_users = [
+  123123123
+]
+
 # Token of your Telegram bot - you get this from @botfather.
 telegram_bot_token = "..."
 
@@ -48,10 +78,12 @@ skip_initial_send = true
 
 # Set default limit of posts to fetch for each subreddit. Used when not
 # specified for a subreddit.
+# Optional. The default is 1.
 default_limit = 1
 
 # Set default time period of top list fetched. Used when not specified for a
-# subreddit. String and one of: hour, day, week, month, year, all
+# subreddit. String and one of: hour, day, week, month, year, all.
+# Optional. The default is `day`.
 default_time = "day"
 ```
 
