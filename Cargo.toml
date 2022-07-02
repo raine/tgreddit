@@ -30,3 +30,9 @@ toml = "0.5.9"
 ureq = { version = "2.4.0", features = ["json"] }
 url = "2.2.2"
 xdg = "2.4.1"
+
+# Use vendored openssl. We don't depend on it directly.
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
+[features]
+vendored-openssl = ["openssl"]
