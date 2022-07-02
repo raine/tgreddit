@@ -292,7 +292,7 @@ async fn check_new_posts_for_subscription(
             // as seen, unless skip_initial_send is enabled
             let is_new_subreddit = !db
                 .existing_posts_for_subreddit(chat_id, subreddit)
-                .expect("failed to query if subreddit has existing posts");
+                .context("failed to query if subreddit has existing posts")?;
             let only_mark_seen = is_new_subreddit && config.skip_initial_send;
 
             for post in posts {

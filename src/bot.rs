@@ -85,17 +85,18 @@ pub async fn handle_command(
             tg.send_message(message.chat.id, Command::descriptions().to_string())
                 .await?;
         }
-        Command::Sub(args) => {
+        Command::Sub(mut args) => {
             let db = db::Database::open(&config)?;
             let chat_id = message.chat.id.0;
             let subreddit_about = reddit::get_subreddit_about(&args.subreddit);
             match subreddit_about {
                 Ok(data) => {
+                    args.subreddit = data.display_name;
                     db.subscribe(chat_id, &args)?;
                     info!("subscribed in chat id {chat_id} with {args:#?};");
                     tg.send_message(
                         ChatId(chat_id),
-                        format!("Subscribed to {}", data.display_name_prefixed),
+                        format!("Subscribed to r/{}", args.subreddit),
                     )
                     .await?;
                 }
@@ -113,9 +114,9 @@ pub async fn handle_command(
             let db = db::Database::open(&config)?;
             let chat_id = message.chat.id.0;
             let subreddit = subreddit.replace("r/", "");
-            let reply = match db.unsubscribe(chat_id, &subreddit)? {
-                true => format!("Unsubscribed from r/{subreddit}"),
-                false => format!("Error: Not subscribed to r/{subreddit}"),
+            let reply = match db.unsubscribe(chat_id, &subreddit) {
+                Ok(sub) => format!("Unsubscribed from r/{sub}"),
+                Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
             };
             tg.send_message(ChatId(chat_id), reply).await?;
         }

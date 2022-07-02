@@ -136,20 +136,25 @@ impl Database {
         Ok(())
     }
 
-    pub fn unsubscribe(&self, chat_id: i64, subreddit: &str) -> Result<bool> {
+    pub fn unsubscribe(&self, chat_id: i64, subreddit: &str) -> Result<String> {
         let mut stmt = self.conn.prepare(
             "
             delete from subscription
             where chat_id = :chat_id and subreddit LIKE :subreddit
+            returning subreddit
             ",
         )?;
-        let deleted = stmt
-            .execute(named_params! {
-                ":chat_id": chat_id,
-                ":subreddit": subreddit,
-            })
+        let deleted_subreddit: String = stmt
+            .query_row(
+                named_params! {
+                    ":chat_id": chat_id,
+                    ":subreddit": subreddit,
+                },
+                |row| row.get("subreddit"),
+            )
             .context("could not delete subscription")?;
-        Ok(deleted > 0)
+
+        Ok(deleted_subreddit)
     }
 
     #[allow(dead_code)]
@@ -297,7 +302,7 @@ mod tests {
         let subs = db.get_subscriptions_for_chat(1).unwrap();
         assert_eq!(subs.len(), 1);
         let deleted = db.unsubscribe(1, "test").unwrap();
-        assert!(deleted);
+        assert_eq!(deleted, "test");
         let subs = db.get_subscriptions_for_chat(1).unwrap();
         assert_eq!(subs, vec![]);
     }
