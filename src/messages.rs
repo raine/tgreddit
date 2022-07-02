@@ -1,4 +1,6 @@
 use crate::reddit;
+use crate::*;
+use itertools::Itertools;
 
 fn escape(html: &str) -> String {
     html.replace('<', "&lt;").replace('>', "&gt;")
@@ -36,6 +38,10 @@ pub fn format_link_message_html(post: &reddit::Post) -> String {
 
 pub fn format_self_message_html(post: &reddit::Post) -> String {
     format_media_caption_html(post)
+}
+
+pub fn format_subscription_list(post: &[Subscription]) -> String {
+    post.iter().map(|sub| sub.subreddit.to_owned()).join("\n")
 }
 
 #[cfg(test)]

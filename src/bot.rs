@@ -20,6 +20,8 @@ pub enum Command {
     Sub(SubscriptionArgs),
     #[command(description = "unsubscribe from subreddit's top posts")]
     Unsub(String),
+    #[command(description = "list subreddit subscriptions")]
+    ListSubs,
 }
 
 pub struct MyBot {
@@ -119,6 +121,12 @@ pub async fn handle_command(
                 Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
             };
             tg.send_message(ChatId(chat_id), reply).await?;
+        }
+        Command::ListSubs => {
+            let db = db::Database::open(&config)?;
+            let subs = db.get_subscriptions_for_chat(message.chat.id.0)?;
+            let reply = messages::format_subscription_list(&subs);
+            tg.send_message(message.chat.id, reply).await?;
         }
     };
 
