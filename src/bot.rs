@@ -135,7 +135,11 @@ fn parse_subscribe_message(input: String) -> Result<(SubscriptionArgs,), ParseEr
     let subreddit_match = SUBREDDIT_RE
         .find(&input)
         .ok_or_else(|| ParseError::Custom("No subreddit given".into()))?;
-    let subreddit = subreddit_match.as_str().to_string().replace("r/", "");
+    let subreddit = subreddit_match
+        .as_str()
+        .to_string()
+        .replace("/r/", "")
+        .replace("r/", "");
     let rest = &input[(subreddit_match.end())..];
 
     let limit: Option<u32> = LIMIT_RE
@@ -196,6 +200,17 @@ mod tests {
     #[test]
     fn test_parse_subscribe_message_strips_prefix() {
         let args = parse_subscribe_message("r/AnimalsBeingJerks".to_string()).unwrap();
+        assert_eq!(
+            args.0,
+            SubscriptionArgs {
+                subreddit: "AnimalsBeingJerks".to_string(),
+                limit: None,
+                time: None,
+                filter: None,
+            },
+        );
+
+        let args = parse_subscribe_message("/r/AnimalsBeingJerks".to_string()).unwrap();
         assert_eq!(
             args.0,
             SubscriptionArgs {
