@@ -41,22 +41,69 @@ pub fn format_self_message_html(post: &reddit::Post) -> String {
 }
 
 pub fn format_subscription_list(post: &[Subscription]) -> String {
+    fn format_subscription(sub: &Subscription) -> String {
+        let mut args = vec![];
+        if let Some(time) = sub.time {
+            args.push(format!("time={}", time));
+        }
+        if let Some(limit) = sub.limit {
+            args.push(format!("limit={}", limit));
+        }
+        if let Some(filter) = sub.filter {
+            args.push(format!("filter={}", filter));
+        }
+
+        let args_str = if !args.is_empty() {
+            format!("({})", args.join(", "))
+        } else {
+            "".to_string()
+        };
+
+        [sub.subreddit.to_owned(), args_str]
+            .join(" ")
+            .trim_end()
+            .to_string()
+    }
+
     if post.is_empty() {
         "No subscriptions".to_owned()
     } else {
-        post.iter().map(|sub| sub.subreddit.to_owned()).join("\n")
+        post.iter().map(format_subscription).join("\n")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::format_html_anchor;
+    use super::*;
 
     #[test]
     fn test_format_html_anchor() {
         assert_eq!(
             format_html_anchor("https://example.com", "<hello></world>"),
             r#"<a href="https://example.com">&lt;hello&gt;&lt;/world&gt;</a>"#
+        )
+    }
+
+    #[test]
+    fn test_format_subscription_list() {
+        assert_eq!(
+            format_subscription_list(&[
+                Subscription {
+                    chat_id: 1,
+                    subreddit: "foo".to_owned(),
+                    limit: None,
+                    time: None,
+                    filter: None,
+                },
+                Subscription {
+                    chat_id: 1,
+                    subreddit: "bar".to_owned(),
+                    limit: Some(1),
+                    time: Some(TopPostsTimePeriod::Week),
+                    filter: None,
+                },
+            ]),
+            "foo\nbar (time=week, limit=1)"
         )
     }
 }
