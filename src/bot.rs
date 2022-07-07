@@ -80,55 +80,68 @@ pub async fn handle_command(
     tg: Arc<AutoSend<Bot>>,
     command: Command,
     config: Arc<config::Config>,
-    _me: teloxide::types::Me,
 ) -> Result<()> {
-    match command {
-        Command::Help => {
-            tg.send_message(message.chat.id, Command::descriptions().to_string())
-                .await?;
-        }
-        Command::Sub(mut args) => {
-            let db = db::Database::open(&config)?;
-            let chat_id = message.chat.id.0;
-            let subreddit_about = reddit::get_subreddit_about(&args.subreddit);
-            match subreddit_about {
-                Ok(data) => {
-                    args.subreddit = data.display_name;
-                    db.subscribe(chat_id, &args)?;
-                    info!("subscribed in chat id {chat_id} with {args:#?};");
-                    tg.send_message(
-                        ChatId(chat_id),
-                        format!("Subscribed to r/{}", args.subreddit),
-                    )
+    async fn handle(
+        message: &Message,
+        tg: &AutoSend<Bot>,
+        command: Command,
+        config: Arc<config::Config>,
+    ) -> Result<()> {
+        match command {
+            Command::Help => {
+                tg.send_message(message.chat.id, Command::descriptions().to_string())
                     .await?;
-                }
-                Err(reddit::SubredditAboutError::NoSuchSubreddit) => {
-                    tg.send_message(ChatId(chat_id), "No such subreddit")
+            }
+            Command::Sub(mut args) => {
+                let db = db::Database::open(&config)?;
+                let chat_id = message.chat.id.0;
+                let subreddit_about = reddit::get_subreddit_about(&args.subreddit);
+                match subreddit_about {
+                    Ok(data) => {
+                        args.subreddit = data.display_name;
+                        db.subscribe(chat_id, &args)?;
+                        info!("subscribed in chat id {chat_id} with {args:#?};");
+                        tg.send_message(
+                            ChatId(chat_id),
+                            format!("Subscribed to r/{}", args.subreddit),
+                        )
                         .await?;
-                }
-                Err(_) => {
-                    tg.send_message(ChatId(chat_id), "Something went wrong")
-                        .await?;
+                    }
+                    Err(reddit::SubredditAboutError::NoSuchSubreddit) => {
+                        tg.send_message(ChatId(chat_id), "No such subreddit")
+                            .await?;
+                    }
+                    Err(err) => {
+                        Err(err)?;
+                    }
                 }
             }
-        }
-        Command::Unsub(subreddit) => {
-            let db = db::Database::open(&config)?;
-            let chat_id = message.chat.id.0;
-            let subreddit = subreddit.replace("r/", "");
-            let reply = match db.unsubscribe(chat_id, &subreddit) {
-                Ok(sub) => format!("Unsubscribed from r/{sub}"),
-                Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
-            };
-            tg.send_message(ChatId(chat_id), reply).await?;
-        }
-        Command::ListSubs => {
-            let db = db::Database::open(&config)?;
-            let subs = db.get_subscriptions_for_chat(message.chat.id.0)?;
-            let reply = messages::format_subscription_list(&subs);
-            tg.send_message(message.chat.id, reply).await?;
-        }
-    };
+            Command::Unsub(subreddit) => {
+                let db = db::Database::open(&config)?;
+                let chat_id = message.chat.id.0;
+                let subreddit = subreddit.replace("r/", "");
+                let reply = match db.unsubscribe(chat_id, &subreddit) {
+                    Ok(sub) => format!("Unsubscribed from r/{sub}"),
+                    Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
+                };
+                tg.send_message(ChatId(chat_id), reply).await?;
+            }
+            Command::ListSubs => {
+                let db = db::Database::open(&config)?;
+                let subs = db.get_subscriptions_for_chat(message.chat.id.0)?;
+                let reply = messages::format_subscription_list(&subs);
+                tg.send_message(message.chat.id, reply).await?;
+            }
+        };
+
+        Ok(())
+    }
+
+    if let Err(err) = handle(&message, &tg, command, config).await {
+        error!("failed to handle message: {}", err);
+        tg.send_message(message.chat.id, "Something went wrong")
+            .await?;
+    }
 
     Ok(())
 }
