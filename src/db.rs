@@ -154,6 +154,20 @@ impl Database {
             )
             .context("could not delete subscription")?;
 
+        // Delete posts so that if subreddit is subscribed to later, the first posts seen won't be
+        // considered new.
+        let mut stmt = self.conn.prepare(
+            "
+            delete from post
+            where chat_id = :chat_id and subreddit = :subreddit
+            ",
+        )?;
+        stmt.execute(named_params! {
+            ":chat_id": chat_id,
+            ":subreddit": deleted_subreddit,
+        })
+        .context("could not delete posts")?;
+
         Ok(deleted_subreddit)
     }
 
@@ -305,5 +319,37 @@ mod tests {
         assert_eq!(deleted, "test");
         let subs = db.get_subscriptions_for_chat(1).unwrap();
         assert_eq!(subs, vec![]);
+    }
+
+    #[test]
+    fn test_db_unsubscribe_deletes_posts() {
+        let config = Config::default();
+        let mut db = Database::open(&config).unwrap();
+        db.migrate().unwrap();
+        let subscription_args = SubscriptionArgs {
+            subreddit: "test".to_string(),
+            limit: Some(1),
+            time: Some(TopPostsTimePeriod::Week),
+            filter: Some(PostType::Video),
+        };
+        db.subscribe(1, &subscription_args).unwrap();
+        let post = Post {
+            id: "v6nu75".into(),
+            created: 1654581100.0,
+            post_hint: Some("link".into()),
+            subreddit: "test".into(),
+            title: "Tipping a cow to trim its hooves".into(),
+            is_self: false,
+            is_video: false,
+            ups: 469,
+            permalink: "/r/test/comments/v6nu75/tipping_a_cow_to_trim_its_hooves/".into(),
+            url: "https://i.imgur.com/Zt6f5mB.gifv".into(),
+            post_type: PostType::Video,
+            crosspost_parent_list: None,
+        };
+        db.mark_post_seen(1, &post).unwrap();
+        assert!(db.is_post_seen(1, &post).unwrap());
+        db.unsubscribe(1, "test").unwrap();
+        assert!(!db.is_post_seen(1, &post).unwrap());
     }
 }
