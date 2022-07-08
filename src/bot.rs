@@ -22,6 +22,8 @@ pub enum Command {
     Unsub(String),
     #[command(description = "list subreddit subscriptions")]
     ListSubs,
+    #[command(description = "get top posts", parse_with = "parse_subscribe_message")]
+    Get(SubscriptionArgs),
 }
 
 pub struct MyBot {
@@ -131,6 +133,43 @@ pub async fn handle_command(
                 let subs = db.get_subscriptions_for_chat(message.chat.id.0)?;
                 let reply = messages::format_subscription_list(&subs);
                 tg.send_message(message.chat.id, reply).await?;
+            }
+            Command::Get(args) => {
+                let subreddit = &args.subreddit;
+                let limit = args
+                    .limit
+                    .or(config.default_limit)
+                    .unwrap_or(config::DEFAULT_LIMIT);
+                let time = args
+                    .time
+                    .or(config.default_time)
+                    .unwrap_or(config::DEFAULT_TIME_PERIOD);
+                let filter = args.filter.or(config.default_filter);
+                let chat_id = message.chat.id.0;
+
+                let posts = reddit::get_subreddit_top_posts(subreddit, limit, &time)
+                    .context("failed to get posts")?
+                    .into_iter()
+                    .filter(|p| {
+                        if filter.is_some() {
+                            filter.as_ref() == Some(&p.post_type)
+                        } else {
+                            true
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
+
+                if !posts.is_empty() {
+                    for post in posts {
+                        if let Err(e) = handle_new_post(tg, chat_id, &post).await {
+                            error!("failed to handle new post: {e}");
+                        }
+                    }
+                } else {
+                    tg.send_message(message.chat.id, "No posts found").await?;
+                }
             }
         };
 

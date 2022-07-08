@@ -44,6 +44,11 @@ Remove a subscription from the current conversation.
 
 List all subreddit subscriptions for the current conversation.
 
+### `/get <subreddit> [limit=<limit>] [time=<time>] [filter=<filter>]`
+
+Get the current top posts similarly to how subscribing to a subreddit would
+return new posts.
+
 ## configuration
 
 ### env vars
