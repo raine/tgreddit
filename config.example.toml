@@ -1,4 +1,5 @@
 db_path = "/data/data.db3"
+authorized_user_ids = [123123123]
 telegram_bot_token = "xxx"
 check_interval_secs = 600
 skip_initial_send = true
