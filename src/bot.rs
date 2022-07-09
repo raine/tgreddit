@@ -163,7 +163,7 @@ pub async fn handle_command(
 
                 if !posts.is_empty() {
                     for post in posts {
-                        if let Err(e) = handle_new_post(tg, chat_id, &post).await {
+                        if let Err(e) = handle_new_post(&config, tg, chat_id, &post).await {
                             error!("failed to handle new post: {e}");
                         }
                     }

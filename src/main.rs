@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
         let post = reddit::get_link(&post_id).unwrap();
         info!("{:#?}", post);
         if let Some(chat_id) = opts.opt_str("chat-id") {
-            return handle_new_post(&bot.tg, chat_id.parse().unwrap(), &post).await;
+            return handle_new_post(&config, &bot.tg, chat_id.parse().unwrap(), &post).await;
         }
         return Ok(());
     }
@@ -130,13 +130,14 @@ fn download_url(url: &str) -> Result<(PathBuf, TempDir)> {
 }
 
 async fn handle_new_video_post(
+    config: &config::Config,
     tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
     let video = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
     info!("got a video: {video:?}");
-    let caption = messages::format_media_caption_html(post);
+    let caption = messages::format_media_caption_html(post, config.links_base_url.as_deref());
     tg.send_video(ChatId(chat_id), InputFile::file(&video.path))
         .parse_mode(teloxide::types::ParseMode::Html)
         .caption(&caption)
@@ -149,6 +150,7 @@ async fn handle_new_video_post(
 }
 
 async fn handle_new_image_post(
+    config: &config::Config,
     tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
@@ -156,7 +158,8 @@ async fn handle_new_image_post(
     match download_url(&post.url) {
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
-            let caption = messages::format_media_caption_html(post);
+            let caption =
+                messages::format_media_caption_html(post, config.links_base_url.as_deref());
             tg.send_photo(ChatId(chat_id), InputFile::file(path))
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .caption(&caption)
@@ -171,8 +174,13 @@ async fn handle_new_image_post(
     }
 }
 
-async fn handle_new_link_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    let message_html = messages::format_link_message_html(post);
+async fn handle_new_link_post(
+    config: &config::Config,
+    tg: &AutoSend<Bot>,
+    chat_id: i64,
+    post: &reddit::Post,
+) -> Result<()> {
+    let message_html = messages::format_link_message_html(post, config.links_base_url.as_deref());
     tg.send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
         .disable_web_page_preview(false)
@@ -181,8 +189,13 @@ async fn handle_new_link_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::P
     Ok(())
 }
 
-async fn handle_new_self_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    let message_html = messages::format_self_message_html(post);
+async fn handle_new_self_post(
+    config: &config::Config,
+    tg: &AutoSend<Bot>,
+    chat_id: i64,
+    post: &reddit::Post,
+) -> Result<()> {
+    let message_html = messages::format_self_message_html(post, config.links_base_url.as_deref());
     tg.send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
         .disable_web_page_preview(true)
@@ -191,7 +204,12 @@ async fn handle_new_self_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::P
     Ok(())
 }
 
-async fn handle_new_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_new_post(
+    config: &config::Config,
+    tg: &AutoSend<Bot>,
+    chat_id: i64,
+    post: &reddit::Post,
+) -> Result<()> {
     info!("got new {post:#?}");
     let mut post = Cow::Borrowed(post);
 
@@ -204,10 +222,10 @@ async fn handle_new_post(tg: &AutoSend<Bot>, chat_id: i64, post: &reddit::Post) 
     }
 
     match post.post_type {
-        reddit::PostType::Image => handle_new_image_post(tg, chat_id, &post).await,
-        reddit::PostType::Video => handle_new_video_post(tg, chat_id, &post).await,
-        reddit::PostType::Link => handle_new_link_post(tg, chat_id, &post).await,
-        reddit::PostType::SelfText => handle_new_self_post(tg, chat_id, &post).await,
+        reddit::PostType::Image => handle_new_image_post(config, tg, chat_id, &post).await,
+        reddit::PostType::Video => handle_new_video_post(config, tg, chat_id, &post).await,
+        reddit::PostType::Link => handle_new_link_post(config, tg, chat_id, &post).await,
+        reddit::PostType::SelfText => handle_new_self_post(config, tg, chat_id, &post).await,
         reddit::PostType::Unknown => {
             warn!("unknown post type, skipping");
             Ok(())
@@ -240,7 +258,7 @@ async fn check_post_newness(
     if !only_mark_seen {
         // Intentionally marking post as seen if handling it fails. It's preferable to not have it
         // fail continuously.
-        if let Err(e) = handle_new_post(tg, chat_id, post).await {
+        if let Err(e) = handle_new_post(config, tg, chat_id, post).await {
             error!("failed to handle new post: {e}");
         }
     }

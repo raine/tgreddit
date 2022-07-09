@@ -83,6 +83,12 @@ check_interval_secs = 600
 # Optional. Defaults to true.
 skip_initial_send = true
 
+# Set the post comments links to use an alternative frontend. Useful as the
+# official Reddit web app is increasingly user hostile on mobile. Possible
+# alternative frontends include teddit.net and libredd.it, but you can use any.
+# Optional. Defaults to official Reddit.
+links_base_url = "https://teddit.net"
+
 # Set default limit of posts to fetch for each subreddit. Used when not
 # specified for a subreddit.
 # Optional. The default is 1.

@@ -10,34 +10,41 @@ fn format_html_anchor(href: &str, text: &str) -> String {
     format!(r#"<a href="{href}">{}</a>"#, escape(text))
 }
 
-fn format_subreddit_link(subreddit: &str) -> String {
+fn format_subreddit_link(subreddit: &str, base_url: Option<&str>) -> String {
     format_html_anchor(
-        &reddit::format_subreddit_url(subreddit),
+        &reddit::format_subreddit_url(subreddit, base_url),
         &format!("/r/{}", &subreddit),
     )
 }
 
-pub fn format_meta_html(post: &reddit::Post) -> String {
-    let subreddit_link = format_subreddit_link(&post.subreddit);
-    let comments_link = format_html_anchor(&post.format_permalink_url(), "comments");
-    let old_comments_link = format_html_anchor(&post.format_old_permalink_url(), "old");
-    format!("{subreddit_link} [{comments_link}, {old_comments_link}]")
+fn format_meta_html(post: &reddit::Post, links_base_url: Option<&str>) -> String {
+    let subreddit_link = format_subreddit_link(&post.subreddit, links_base_url);
+    let comments_link = format_html_anchor(&post.format_permalink_url(links_base_url), "comments");
+
+    // If using custom links base url, the old reddit link doesn't make sense.
+    match links_base_url {
+        Some(_) => format!("{subreddit_link} [{comments_link}]"),
+        None => {
+            let old_comments_link = format_html_anchor(&post.format_old_permalink_url(), "old");
+            format!("{subreddit_link} [{comments_link}, {old_comments_link}]")
+        }
+    }
 }
 
-pub fn format_media_caption_html(post: &reddit::Post) -> String {
+pub fn format_media_caption_html(post: &reddit::Post, links_base_url: Option<&str>) -> String {
     let title = &post.title;
-    let meta = format_meta_html(post);
+    let meta = format_meta_html(post, links_base_url);
     format!("{title}\n{meta}")
 }
 
-pub fn format_link_message_html(post: &reddit::Post) -> String {
+pub fn format_link_message_html(post: &reddit::Post, links_base_url: Option<&str>) -> String {
     let title = format_html_anchor(&post.url, &post.title);
-    let meta = format_meta_html(post);
+    let meta = format_meta_html(post, links_base_url);
     format!("{title}\n{meta}")
 }
 
-pub fn format_self_message_html(post: &reddit::Post) -> String {
-    format_media_caption_html(post)
+pub fn format_self_message_html(post: &reddit::Post, links_base_url: Option<&str>) -> String {
+    format_media_caption_html(post, links_base_url)
 }
 
 pub fn format_subscription_list(post: &[Subscription]) -> String {

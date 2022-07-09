@@ -12,8 +12,12 @@ fn get_base_url() -> Url {
     Url::parse(REDDIT_BASE_URL).unwrap()
 }
 
-pub fn format_url_from_path(path: &str) -> String {
-    format!("{REDDIT_BASE_URL}{path}")
+pub fn format_url_from_path(path: &str, base_url: Option<&str>) -> String {
+    let base_url = match base_url {
+        Some(u) => u,
+        None => REDDIT_BASE_URL,
+    };
+    format!("{base_url}{path}")
 }
 
 pub fn to_old_reddit_url(url: &str) -> String {
@@ -23,8 +27,8 @@ pub fn to_old_reddit_url(url: &str) -> String {
     url.to_string()
 }
 
-pub fn format_subreddit_url(subreddit: &str) -> String {
-    format_url_from_path(&format!("/r/{subreddit}"))
+pub fn format_subreddit_url(subreddit: &str, base_url: Option<&str>) -> String {
+    format_url_from_path(&format!("/r/{subreddit}"), base_url)
 }
 
 pub fn get_subreddit_top_posts(

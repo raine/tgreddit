@@ -36,6 +36,7 @@ pub struct Config {
     pub check_interval_secs: u64,
     #[serde(default = "default_skip_initial_send")]
     pub skip_initial_send: bool,
+    pub links_base_url: Option<String>,
     pub default_limit: Option<u32>,
     pub default_time: Option<TopPostsTimePeriod>,
     pub default_filter: Option<PostType>,
