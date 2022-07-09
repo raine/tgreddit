@@ -5,9 +5,9 @@ Get a feed of your favorite subreddits to Telegram.
 The killer feature: No need to visit Reddit, as all media is embedded thanks to
 [yt-dlp](yt-dlp) and Telegram's excellent media support.
 
-<img align=left src="https://user-images.githubusercontent.com/11027/177398248-31e122d4-7e12-4986-9742-5f5a56c2529d.PNG" width=20% height=20%>
-<img align=left src="https://user-images.githubusercontent.com/11027/177400544-685a89d0-3c2f-4e1a-8bc5-7802d0c6180d.jpeg" width=20% height=20%>
-<img src="https://user-images.githubusercontent.com/11027/177397025-f1cdf171-ec0d-4f4a-aa3b-05ecacbb63bd.PNG" width=20% height=20%>
+<img align=left src="https://user-images.githubusercontent.com/11027/178097057-83b27933-9876-405a-b151-a148960819df.jpeg" width=20% height=20%>
+<img align=left src="https://user-images.githubusercontent.com/11027/178096986-5f651336-8208-4c40-9c41-58c95173b24d.jpeg" width=20% height=20%>
+<img src="https://user-images.githubusercontent.com/11027/178099572-e55c7f3c-986b-4804-8540-1004b36950df.jpeg" width=20% height=20%>
 
 ## install
 
@@ -104,6 +104,10 @@ There's a prebuilt Docker image with dependencies included at
 [rainevi/tgreddit](https://hub.docker.com/repository/docker/rainevi/tgreddit).
 Of course, you may also build your own using from the
 [Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
+
+## have an idea, question or a bug report?
+
+Feel free to open an issue or start a new discussion.
 
 [yt-dlp]: https://github.com/yt-dlp/yt-dlp
 [telegram-web]: https://web.telegram.org/
