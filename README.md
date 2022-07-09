@@ -1,6 +1,6 @@
 # tgreddit
 
-Get a feed of your favorite subreddits to Telegram.
+Get a feed of top posts from your favorite subreddits to Telegram.
 
 The killer feature: No need to visit Reddit, as all media is embedded thanks to
 [yt-dlp](yt-dlp) and Telegram's excellent media support.
@@ -108,6 +108,7 @@ in page URL.
 
 There's a prebuilt Docker image with dependencies included at
 [rainevi/tgreddit](https://hub.docker.com/repository/docker/rainevi/tgreddit).
+
 Of course, you may also build your own using from the
 [Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
 
