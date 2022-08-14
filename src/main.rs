@@ -19,6 +19,7 @@ use std::{
     },
     time::Duration,
 };
+use teloxide::payloads::SendVideoSetters;
 use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
 use teloxide::prelude::*;
 use teloxide::types::InputFile;
@@ -141,6 +142,8 @@ async fn handle_new_video_post(
     tg.send_video(ChatId(chat_id), InputFile::file(&video.path))
         .parse_mode(teloxide::types::ParseMode::Html)
         .caption(&caption)
+        .height(video.height.into())
+        .width(video.width.into())
         .await?;
     info!(
         "video uploaded post_id={} chat_id={chat_id} video={video:?}",
