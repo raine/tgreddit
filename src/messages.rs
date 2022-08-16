@@ -43,10 +43,6 @@ pub fn format_link_message_html(post: &reddit::Post, links_base_url: Option<&str
     format!("{title}\n{meta}")
 }
 
-pub fn format_self_message_html(post: &reddit::Post, links_base_url: Option<&str>) -> String {
-    format_media_caption_html(post, links_base_url)
-}
-
 pub fn format_subscription_list(post: &[Subscription]) -> String {
     fn format_subscription(sub: &Subscription) -> String {
         let mut args = vec![];

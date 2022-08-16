@@ -198,7 +198,7 @@ async fn handle_new_self_post(
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
-    let message_html = messages::format_self_message_html(post, config.links_base_url.as_deref());
+    let message_html = messages::format_media_caption_html(post, config.links_base_url.as_deref());
     tg.send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
         .disable_web_page_preview(true)
@@ -229,9 +229,12 @@ async fn handle_new_post(
         reddit::PostType::Video => handle_new_video_post(config, tg, chat_id, &post).await,
         reddit::PostType::Link => handle_new_link_post(config, tg, chat_id, &post).await,
         reddit::PostType::SelfText => handle_new_self_post(config, tg, chat_id, &post).await,
+        // /r/bestof posts have no characteristics like post_hint that could be used to
+        // determine them as a type of Link; as a workaround, post Unknown post types the same way
+        // as a link
         reddit::PostType::Unknown => {
-            warn!("unknown post type, skipping");
-            Ok(())
+            warn!("unknown post type, post={post:?}");
+            handle_new_link_post(config, tg, chat_id, &post).await
         }
     }
 }
