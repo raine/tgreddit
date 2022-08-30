@@ -1,36 +1,36 @@
-use crate::types::*;
+use crate::{download::*, types::*};
 use anyhow::{Context, Result};
 use log::*;
-use reddit::PostType;
-use reddit::TopPostsTimePeriod;
+use reddit::{PostType, TopPostsTimePeriod};
 use signal_hook::{
     consts::signal::{SIGINT, SIGTERM},
     iterator::Signals,
 };
+use std::collections::HashMap;
 use std::string::ToString;
 use std::{
     borrow::Cow,
-    fs::File,
-    io,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
     time::Duration,
 };
-use teloxide::payloads::SendVideoSetters;
-use teloxide::payloads::{SendMessageSetters, SendPhotoSetters};
-use teloxide::prelude::*;
 use teloxide::types::InputFile;
+use teloxide::{
+    payloads::{SendMessageSetters, SendPhotoSetters, SendVideoSetters},
+    types::InputMediaPhoto,
+};
+use teloxide::{prelude::*, types::InputMedia};
 use tempdir::TempDir;
 use tokio::sync::broadcast;
-use url::Url;
 
 mod args;
 mod bot;
 mod config;
 mod db;
+mod download;
 mod messages;
 mod reddit;
 mod types;
@@ -111,25 +111,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Downloads url to a file and returns the path along with handle to temp dir in which the file is.
-/// Whe the temp dir value is dropped, the contents in file system are deleted.
-fn download_url(url: &str) -> Result<(PathBuf, TempDir)> {
-    info!("downloading {url}");
-    let req = ureq::get(url);
-    let res = req.call()?;
-    let tmp_dir = TempDir::new("tgreddit")?;
-    let mut reader = res.into_reader();
-    let parsed_url = Url::parse(url)?;
-    let tmp_filename = Path::new(parsed_url.path())
-        .file_name()
-        .context("could not get basename from url")?;
-    let tmp_path = tmp_dir.path().join(&tmp_filename);
-    let mut file = File::create(&tmp_path).unwrap();
-    io::copy(&mut reader, &mut file)?;
-    info!("downloaded {url} to {}", tmp_path.to_string_lossy());
-    Ok((tmp_path, tmp_dir))
-}
-
 async fn handle_new_video_post(
     config: &config::Config,
     tg: &AutoSend<Bot>,
@@ -158,7 +139,7 @@ async fn handle_new_image_post(
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
-    match download_url(&post.url) {
+    match download_url_to_tmp(&post.url) {
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
             let caption =
@@ -207,6 +188,69 @@ async fn handle_new_self_post(
     Ok(())
 }
 
+fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBuf, TempDir)>> {
+    let media_metadata_map = post
+        .media_metadata
+        .as_ref()
+        .expect("expected media_metadata to exist in gallery post");
+
+    let mut map: HashMap<String, (PathBuf, TempDir)> = HashMap::new();
+    for (id, media_metadata) in media_metadata_map {
+        let s = &media_metadata.s;
+        let url = &s.url.replace("&amp;", "&");
+        info!("got media id={id} x={} y={} url={}", &s.x, &s.y, url);
+        map.insert(id.to_string(), download_url_to_tmp(url)?);
+    }
+
+    Ok(map)
+}
+
+async fn handle_new_gallery_post(
+    config: &config::Config,
+    tg: &AutoSend<Bot>,
+    chat_id: i64,
+    post: &reddit::Post,
+) -> Result<()> {
+    // post.gallery_data is an array that describes the order of photos in the gallery, while
+    // post.media_metadata is a map that contains the URL for each photo
+    let gallery_data_items = &post
+        .gallery_data
+        .as_ref()
+        .expect("expected media_metadata to exist in gallery post")
+        .items;
+    let gallery_files_map = tokio::task::block_in_place(|| download_gallery(post))?;
+    let mut media_group = vec![];
+    let mut first = true;
+
+    for item in gallery_data_items {
+        let file = gallery_files_map.get(&item.media_id);
+        match file {
+            Some((image_path, _tempdir)) => {
+                let mut input_media_photo = InputMediaPhoto::new(InputFile::file(image_path));
+                // The first InputMediaPhoto in the vector needs to contain the caption and parse_mode;
+                if first {
+                    let caption =
+                        messages::format_media_caption_html(post, config.links_base_url.as_deref());
+                    input_media_photo = input_media_photo
+                        .caption(&caption)
+                        .parse_mode(teloxide::types::ParseMode::Html);
+                    first = false;
+                }
+
+                media_group.push(InputMedia::Photo(input_media_photo))
+            }
+            None => {
+                error!("could not find downloaded image for gallery data item: {item:?}");
+            }
+        }
+    }
+
+    tg.send_media_group(ChatId(chat_id), media_group).await?;
+    info!("gallery uploaded post_id={} chat_id={chat_id}", post.id);
+
+    Ok(())
+}
+
 async fn handle_new_post(
     config: &config::Config,
     tg: &AutoSend<Bot>,
@@ -229,6 +273,7 @@ async fn handle_new_post(
         reddit::PostType::Video => handle_new_video_post(config, tg, chat_id, &post).await,
         reddit::PostType::Link => handle_new_link_post(config, tg, chat_id, &post).await,
         reddit::PostType::SelfText => handle_new_self_post(config, tg, chat_id, &post).await,
+        reddit::PostType::Gallery => handle_new_gallery_post(config, tg, chat_id, &post).await,
         // /r/bestof posts have no characteristics like post_hint that could be used to
         // determine them as a type of Link; as a workaround, post Unknown post types the same way
         // as a link

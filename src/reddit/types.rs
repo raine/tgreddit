@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
@@ -12,6 +14,7 @@ pub enum PostType {
     Video,
     Link,
     SelfText,
+    Gallery,
     Unknown,
 }
 
@@ -42,6 +45,35 @@ pub struct ListingItem {
     pub data: Post,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+pub struct GalleryDataItem {
+    pub caption: Option<String>,
+    pub media_id: String,
+    pub id: u32,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct GalleryData {
+    pub items: Vec<GalleryDataItem>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Media {
+    pub x: u16,
+    pub y: u16,
+    #[serde(rename = "u")]
+    pub url: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct MediaMetadata {
+    pub status: String,
+    pub e: String,
+    #[serde(rename = "m")]
+    pub mime: String,
+    pub s: Media,
+}
+
 #[derive(Debug, Clone)]
 pub struct Post {
     pub id: String,
@@ -54,8 +86,11 @@ pub struct Post {
     pub url: String,
     pub post_hint: Option<String>,
     pub is_self: bool,
+    pub is_gallery: Option<bool>,
     pub post_type: PostType,
     pub crosspost_parent_list: Option<Vec<Post>>,
+    pub gallery_data: Option<GalleryData>,
+    pub media_metadata: Option<HashMap<String, MediaMetadata>>,
 }
 
 impl<'de> Deserialize<'de> for Post {
@@ -75,7 +110,10 @@ impl<'de> Deserialize<'de> for Post {
             pub url: String,
             pub post_hint: Option<String>,
             pub is_self: bool,
+            pub is_gallery: Option<bool>,
             pub crosspost_parent_list: Option<Vec<Post>>,
+            pub gallery_data: Option<GalleryData>,
+            pub media_metadata: Option<HashMap<String, MediaMetadata>>,
         }
 
         impl PostHelper {
@@ -116,6 +154,8 @@ impl<'de> Deserialize<'de> for Post {
             PostType::Link
         } else if helper.is_self {
             PostType::SelfText
+        } else if helper.is_gallery.unwrap_or(false) {
+            PostType::Gallery
         } else {
             PostType::Unknown
         };
@@ -132,7 +172,10 @@ impl<'de> Deserialize<'de> for Post {
             post_hint: helper.post_hint,
             is_self: helper.is_self,
             crosspost_parent_list: helper.crosspost_parent_list,
+            is_gallery: helper.is_gallery,
             post_type,
+            gallery_data: helper.gallery_data,
+            media_metadata: helper.media_metadata,
         })
     }
 }
