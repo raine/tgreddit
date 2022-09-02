@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     //        tgreddit --debug-post <linkid> --chat-id <chatid> => Also send to telegram
     let opts = args::parse_args();
     if let Some(post_id) = opts.opt_str("debug-post") {
-        let post = reddit::get_link(&post_id).unwrap();
+        let post = reddit::get_link(&post_id).await.unwrap();
         info!("{:#?}", post);
         if let Some(chat_id) = opts.opt_str("chat-id") {
             return handle_new_post(&config, &bot.tg, chat_id.parse().unwrap(), &post).await;
@@ -139,7 +139,7 @@ async fn handle_new_image_post(
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
-    match download_url_to_tmp(&post.url) {
+    match download_url_to_tmp(&post.url).await {
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
             let caption =
@@ -188,7 +188,7 @@ async fn handle_new_self_post(
     Ok(())
 }
 
-fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBuf, TempDir)>> {
+async fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBuf, TempDir)>> {
     let media_metadata_map = post
         .media_metadata
         .as_ref()
@@ -199,7 +199,7 @@ fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBuf, Tem
         let s = &media_metadata.s;
         let url = &s.url.replace("&amp;", "&");
         info!("got media id={id} x={} y={} url={}", &s.x, &s.y, url);
-        map.insert(id.to_string(), download_url_to_tmp(url)?);
+        map.insert(id.to_string(), download_url_to_tmp(url).await?);
     }
 
     Ok(map)
@@ -218,7 +218,7 @@ async fn handle_new_gallery_post(
         .as_ref()
         .expect("expected media_metadata to exist in gallery post")
         .items;
-    let gallery_files_map = tokio::task::block_in_place(|| download_gallery(post))?;
+    let gallery_files_map = download_gallery(post).await?;
     let mut media_group = vec![];
     let mut first = true;
 
@@ -265,7 +265,7 @@ async fn handle_new_post(
     // TODO: It appears that post with is_gallery=true will never have post_hint set
     if post.post_hint.is_none() {
         info!("post missing post_hint, getting like directly");
-        post = Cow::Owned(reddit::get_link(&post.id).unwrap());
+        post = Cow::Owned(reddit::get_link(&post.id).await.unwrap());
     }
 
     match post.post_type {
@@ -353,7 +353,7 @@ async fn check_new_posts_for_subscription(
     let filter = sub.filter.or(config.default_filter);
     let chat_id = sub.chat_id;
 
-    match reddit::get_subreddit_top_posts(subreddit, limit, &time) {
+    match reddit::get_subreddit_top_posts(subreddit, limit, &time).await {
         Ok(posts) => {
             debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
 

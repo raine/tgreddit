@@ -97,7 +97,7 @@ pub async fn handle_command(
             Command::Sub(mut args) => {
                 let db = db::Database::open(&config)?;
                 let chat_id = message.chat.id.0;
-                let subreddit_about = reddit::get_subreddit_about(&args.subreddit);
+                let subreddit_about = reddit::get_subreddit_about(&args.subreddit).await;
                 match subreddit_about {
                     Ok(data) => {
                         args.subreddit = data.display_name;
@@ -148,6 +148,7 @@ pub async fn handle_command(
                 let chat_id = message.chat.id.0;
 
                 let posts = reddit::get_subreddit_top_posts(subreddit, limit, &time)
+                    .await
                     .context("failed to get posts")?
                     .into_iter()
                     .filter(|p| {

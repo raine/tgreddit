@@ -8,7 +8,7 @@ pub struct Video {
     pub height: u16,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Subscription {
     pub chat_id: i64,
     pub subreddit: String,
@@ -17,7 +17,7 @@ pub struct Subscription {
     pub filter: Option<PostType>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubscriptionArgs {
     pub subreddit: String,
     pub limit: Option<u32>,
