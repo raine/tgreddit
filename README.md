@@ -1,9 +1,14 @@
 # tgreddit
 
-Get a feed of top posts from your favorite subreddits to Telegram.
+A telegram bot that gives you a feed of top posts from your favorite subreddits.
 
 The killer feature: No need to visit Reddit, as all media is embedded thanks to
-[yt-dlp](yt-dlp) and Telegram's excellent media support.
+[yt-dlp][yt-dlp] and Telegram's excellent media support.
+
+Intended to be self-hosted, as Reddit's API has rate-limiting and downloading
+videos with `yt-dlp` can be resource intensive. The simplest way to self-host is
+to use the prebuilt [docker image](#docker-image) that includes necessary
+dependencies.
 
 <img align=left src="https://user-images.githubusercontent.com/11027/178097057-83b27933-9876-405a-b151-a148960819df.jpeg" width=20% height=20%>
 <img align=left src="https://user-images.githubusercontent.com/11027/178096986-5f651336-8208-4c40-9c41-58c95173b24d.jpeg" width=20% height=20%>
@@ -17,7 +22,7 @@ $ cargo install tgreddit
 
 ### requirements
 
-Depends on [yt-dlp](yt-dlp) (and for good results, yt-dlp requires ffmpeg).
+Depends on [yt-dlp][yt-dlp] (and for good results, yt-dlp requires ffmpeg).
 
 ## bot commands
 
