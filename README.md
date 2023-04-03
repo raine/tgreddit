@@ -41,6 +41,10 @@ Explanation: Subscribe to top posts in r/AnimalsBeingJerks so that the top 5
 posts of the weekly top list are considered. Whenever a new post appears among
 those top 5 posts, they will be posted in the conversation.
 
+See the
+[example configuration](#example-toml-configuration-with-the-options-explained)
+below for further explanation on `limit`, `time`, and `filter`.
+
 ### `/unsub <subreddit>`
 
 Remove a subscription from the current conversation.
@@ -95,7 +99,18 @@ skip_initial_send = true
 links_base_url = "https://teddit.net"
 
 # Set default limit of posts to fetch for each subreddit. Used when not
-# specified for a subreddit.
+# specified for a subreddit in the /sub command.
+#
+# Explanation in more detail: Whenever the bot gets the list of top posts for a
+# subreddit, it will only consider the first <limit> posts. For example, if
+# your limit is 5, the first time around bot will see 5 new posts and mark those
+# as seen and not post anything because it's the first check. Next time around, if
+# there's an unseen post among those 5 top posts, it will be posted in Telegram.
+#
+# So essentially larger the number used as limit, the more posts you can
+# expect to see. For example, with time=month and limit=1 you would see a new post
+# only when the montly top post changes, which is not that often.
+#
 # Optional. The default is 1.
 default_limit = 1
 
@@ -103,6 +118,12 @@ default_limit = 1
 # subreddit. String and one of: hour, day, week, month, year, all.
 # Optional. The default is `day`.
 default_time = "day"
+
+# Set default filter for post type. When fetching for new posts, only posts
+# matching the filter are considered.
+# String and one of: image, video, link, self_text, gallery
+# Optional and unset by default, meaning all post types are considered.
+default_filter = "video"
 ```
 
 Perhaps the simplest way to determine a Telegram channel's ID is to open the
