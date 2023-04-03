@@ -2,6 +2,8 @@
 name = "tgreddit"
 version = "0.1.0"
 edition = "2021"
+description = "Get the top posts of your favorite subreddits to Telegram"
+license = "MIT"
 
 [dependencies]
 anyhow = "1.0.64"
