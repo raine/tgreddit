@@ -1,5 +1,5 @@
 # Step 1: Compute a recipe file
-FROM rust:1.63.0-slim-buster as chef
+FROM rust:1.64.0-slim-buster as chef
 RUN cargo install cargo-chef
 
 # Step 1: Compute a recipe file
@@ -21,7 +21,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json --features vendored-openssl
 
 # Step 3: Build the binary
-FROM rust:1.63.0-slim-buster as builder
+FROM rust:1.64.0-slim-buster as builder
 WORKDIR /app
 RUN rustup target add x86_64-unknown-linux-musl
 COPY Cargo.toml Cargo.lock ./
