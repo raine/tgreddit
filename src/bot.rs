@@ -9,31 +9,31 @@ use teloxide::{
 };
 
 #[derive(BotCommands, Clone)]
-#[command(rename = "lowercase", description = "These commands are supported:")]
+#[command(description = "These commands are supported:")]
 pub enum Command {
     #[command(description = "display this text")]
     Help,
     #[command(
         description = "subscribe to subreddit's top posts",
-        parse_with = "parse_subscribe_message"
+        parse_with = parse_subscribe_message
     )]
     Sub(SubscriptionArgs),
     #[command(description = "unsubscribe from subreddit's top posts")]
     Unsub(String),
     #[command(description = "list subreddit subscriptions")]
     ListSubs,
-    #[command(description = "get top posts", parse_with = "parse_subscribe_message")]
+    #[command(description = "get top posts", parse_with = parse_subscribe_message)]
     Get(SubscriptionArgs),
 }
 
 pub struct MyBot {
-    pub dispatcher: Dispatcher<Arc<AutoSend<Bot>>, anyhow::Error, DefaultKey>,
-    pub tg: Arc<AutoSend<Bot>>,
+    pub dispatcher: Dispatcher<Arc<Bot>, anyhow::Error, DefaultKey>,
+    pub tg: Arc<Bot>,
 }
 
 impl MyBot {
     pub async fn new(config: Arc<config::Config>) -> Result<Self> {
-        let tg = Arc::new(Bot::new(config.telegram_bot_token.expose_secret()).auto_send());
+        let tg = Arc::new(Bot::new(config.telegram_bot_token.expose_secret()));
         tg.set_my_commands(Command::bot_commands()).await?;
 
         let handler = Update::filter_message().branch(
@@ -79,13 +79,13 @@ impl MyBot {
 
 pub async fn handle_command(
     message: Message,
-    tg: Arc<AutoSend<Bot>>,
+    tg: Arc<Bot>,
     command: Command,
     config: Arc<config::Config>,
 ) -> Result<()> {
     async fn handle(
         message: &Message,
-        tg: &AutoSend<Bot>,
+        tg: &Bot,
         command: Command,
         config: Arc<config::Config>,
     ) -> Result<()> {
