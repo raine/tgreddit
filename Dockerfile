@@ -1,5 +1,5 @@
 # Step 1: Compute a recipe file
-FROM rust:1.70.0-slim-buster as chef
+FROM rust:1.70.0-slim-bookworm as chef
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
   cargo install cargo-chef
 
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
   cargo chef cook --release --target aarch64-unknown-linux-gnu --recipe-path recipe.json --features vendored-openssl
 
 # Step 4: Build the binary
-FROM rust:1.70.0-slim-buster as builder
+FROM rust:1.70.0-slim-bookworm as builder
 WORKDIR /app
 RUN rustup target add aarch64-unknown-linux-gnu
 COPY Cargo.toml Cargo.lock ./
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
   cargo build --release --target aarch64-unknown-linux-gnu --features vendored-openssl
 
 # Step 5: Create the final image with binary and deps
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 WORKDIR /app
 COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/tgreddit .
 RUN apt-get update && apt-get install -y \
