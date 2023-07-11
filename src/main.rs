@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
 
 async fn handle_new_video_post(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
@@ -135,7 +135,7 @@ async fn handle_new_video_post(
 
 async fn handle_new_image_post(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
@@ -160,7 +160,7 @@ async fn handle_new_image_post(
 
 async fn handle_new_link_post(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
@@ -175,7 +175,7 @@ async fn handle_new_link_post(
 
 async fn handle_new_self_post(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
@@ -207,7 +207,7 @@ async fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBu
 
 async fn handle_new_gallery_post(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
@@ -253,7 +253,7 @@ async fn handle_new_gallery_post(
 
 async fn handle_new_post(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
@@ -286,7 +286,7 @@ async fn handle_new_post(
 
 async fn check_post_newness(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     chat_id: i64,
     filter: Option<reddit::PostType>,
     post: &reddit::Post,
@@ -320,7 +320,7 @@ async fn check_post_newness(
     Ok(())
 }
 
-async fn check_new_posts(config: &config::Config, tg: &Bot) -> Result<()> {
+async fn check_new_posts(config: &config::Config, tg: &AutoSend<Bot>) -> Result<()> {
     info!("checking subscriptions for new posts");
     let db = db::Database::open(config)?;
     let subs = db.get_all_subscriptions()?;
@@ -337,7 +337,7 @@ async fn check_new_posts(config: &config::Config, tg: &Bot) -> Result<()> {
 
 async fn check_new_posts_for_subscription(
     config: &config::Config,
-    tg: &Bot,
+    tg: &AutoSend<Bot>,
     sub: &Subscription,
 ) -> Result<()> {
     let db = db::Database::open(config)?;
