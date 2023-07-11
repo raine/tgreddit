@@ -138,6 +138,18 @@ There's a prebuilt Docker image with dependencies included at
 Of course, you may also build your own using from the
 [Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
 
+## cross compiling for Raspberry Pi
+
+You can cross-compile tgreddit for Raspberry Pi using a Docker container. The
+resulting executable will be statically linked and should work across different
+Linux distributions on the Raspberry Pi.
+
+```sh
+docker run --rm -it \
+	-v "$(pwd)":/home/rust/src messense/rust-musl-cross:aarch64-musl \
+	cargo build --release --target aarch64-unknown-linux-gnu --features vendored-openssl
+```
+
 ## have an idea, question or a bug report?
 
 Feel free to open an issue or start a new discussion.
