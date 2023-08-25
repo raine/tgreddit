@@ -39,7 +39,7 @@ pub struct Database {
 impl Database {
     pub fn open(config: &Config) -> Result<Self> {
         let conn = Self::get_conn(&config.db_path).context("error connecting to database")?;
-        conn.pragma_update(None, "foreign_keys", &"ON")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
         Ok(Database { conn })
     }
 
@@ -54,7 +54,7 @@ impl Database {
     }
 
     pub fn migrate(&mut self) -> Result<(), rusqlite_migration::Error> {
-        let migrations = MIGRATIONS.iter().map(|e| M::up(*e)).collect();
+        let migrations = MIGRATIONS.iter().map(|e| M::up(e)).collect();
         Migrations::new(migrations).to_latest(&mut self.conn)
     }
 

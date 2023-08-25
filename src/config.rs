@@ -43,7 +43,7 @@ pub struct Config {
 }
 
 pub fn read_config() -> Config {
-    env::var(&CONFIG_PATH_ENV)
+    env::var(CONFIG_PATH_ENV)
         .map_err(|_| format!("{CONFIG_PATH_ENV} environment variable not set"))
         .and_then(|config_path| std::fs::read(config_path).map_err(|e| e.to_string()))
         .and_then(|bytes| toml::from_slice(&bytes).map_err(|e| e.to_string()))

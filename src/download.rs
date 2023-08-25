@@ -19,7 +19,7 @@ pub async fn download_url_to_tmp(url: &str) -> Result<(PathBuf, TempDir)> {
     let tmp_filename = Path::new(parsed_url.path())
         .file_name()
         .context("could not get basename from url")?;
-    let tmp_path = tmp_dir.path().join(&tmp_filename);
+    let tmp_path = tmp_dir.path().join(tmp_filename);
     let mut file = File::create(&tmp_path)
         .map_err(|_| anyhow::anyhow!("failed to create file {:?}", tmp_path))?;
 
