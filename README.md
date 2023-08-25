@@ -63,6 +63,7 @@ return new posts.
 ### env vars
 
 - `CONFIG_PATH`: Path to TOML configuration file. **required**
+- `RUST_LOG`: Logging level. `info` recommended to see meaningful output.
 
 ### example toml configuration with the options explained
 
@@ -130,6 +131,14 @@ Perhaps the simplest way to determine a Telegram channel's ID is to open the
 channel in [Telegram Web client][telegram-web] and observing the numeric value
 in page URL.
 
+## development
+
+The project uses [`just`][just], [`direnv`][direnv] and [`entr`][entr].
+
+```sh
+$ just dev
+```
+
 ## docker image
 
 There's a prebuilt Docker image with dependencies included at
@@ -156,3 +165,6 @@ Feel free to open an issue or start a new discussion.
 
 [yt-dlp]: https://github.com/yt-dlp/yt-dlp
 [telegram-web]: https://web.telegram.org/
+[just]: https://github.com/casey/just
+[direnv]: https://direnv.net/
+[entr]: https://github.com/eradman/entr
