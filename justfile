@@ -4,10 +4,13 @@ build:
 build-release:
   cargo build --release
 
-run-w *FLAGS:
+dev *FLAGS:
   fd .rs | entr -r cargo run {{FLAGS}}
 
-test-w *FLAGS:
+test *FLAGS:
+  cargo test {{FLAGS}}
+
+testw *FLAGS:
   fd .rs | entr -r cargo test {{FLAGS}}
 
 install:
