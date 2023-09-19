@@ -27,11 +27,10 @@ fn make_ytdlp_args(output: &Path, url: &str) -> Vec<OsString> {
 }
 
 /// Downloads given url with yt-dlp and returns path to video
-pub fn download(url: &str) -> Result<Video> {
+pub fn download(url: &str) -> Result<(Video, TempDir)> {
     let tmp_dir = TempDir::new("tgreddit")?;
-    // Convert to path to avoid tmp dir from getting deleted when it goes out of scope
-    let tmp_path = tmp_dir.into_path();
-    let ytdlp_args = make_ytdlp_args(&tmp_path, url);
+    let tmp_path = tmp_dir.path();
+    let ytdlp_args = make_ytdlp_args(tmp_dir.path(), url);
 
     info!("running yt-dlp with arguments {:?}", ytdlp_args);
     let duct_exp = cmd("yt-dlp", ytdlp_args).stderr_to_stdout();
@@ -67,7 +66,7 @@ pub fn download(url: &str) -> Result<Video> {
         height: dimensions.1,
     };
 
-    Ok(video)
+    Ok((video, tmp_dir))
 }
 
 fn parse_dimensions_from_path(path: &Path) -> Option<(u16, u16)> {

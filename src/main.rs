@@ -117,7 +117,8 @@ async fn handle_new_video_post(
     chat_id: i64,
     post: &reddit::Post,
 ) -> Result<()> {
-    let video = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
+    // The temporary directory will be deleted when _tmp_dir is dropped
+    let (video, _tmp_dir) = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
     info!("got a video: {video:?}");
     let caption = messages::format_media_caption_html(post, config.links_base_url.as_deref());
     tg.send_video(ChatId(chat_id), InputFile::file(&video.path))
