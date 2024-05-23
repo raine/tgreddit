@@ -353,6 +353,11 @@ async fn check_new_posts_for_subscription(
         .unwrap_or(config::DEFAULT_TIME_PERIOD);
     let filter = sub.filter.or(config.default_filter);
     let chat_id = sub.chat_id;
+    info!(
+        "checking subreddit /r/{subreddit} for new posts for user {chat_id}",
+        subreddit = subreddit,
+        chat_id = chat_id
+    );
 
     match reddit::get_subreddit_top_posts(subreddit, limit, &time).await {
         Ok(posts) => {
