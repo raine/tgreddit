@@ -1,6 +1,6 @@
 use super::*;
 use anyhow::{Context, Result};
-use log::info;
+use log::{error, info};
 use thiserror::Error;
 use url::Url;
 
@@ -66,16 +66,36 @@ pub async fn get_link(link_id: &str) -> Result<Post> {
         .get(url)
         .query(&[("id", &format!("t3_{link_id}"))])
         .send()
-        .await?
-        .json::<ListingResponse>()
-        .await?;
+        .await
+        .context("failed to send request")?;
 
-    res.data
-        .children
-        .into_iter()
-        .map(|e| e.data)
-        .next()
-        .context("no post in response")
+    let status = res.status();
+    let body = res.text().await.context("failed to read response body")?;
+
+    if !status.is_success() {
+        error!("request failed with status: {}", status);
+        error!("response body: {}", body);
+        anyhow::bail!("Request failed with status: {}", status);
+    }
+
+    match serde_json::from_str::<ListingResponse>(&body) {
+        Ok(parsed) => parsed
+            .data
+            .children
+            .into_iter()
+            .map(|e| e.data)
+            .next()
+            .context("no post in response")
+            .map_err(|e| {
+                error!("failed to get posts for {link_id}: {:?}", e);
+                e
+            }),
+        Err(e) => {
+            error!("error decoding response body: {}", e);
+            error!("response body: {}", body);
+            Err(anyhow::anyhow!("error decoding response body: {}", e))
+        }
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
