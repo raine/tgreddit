@@ -39,6 +39,6 @@ COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/tgreddit .
 RUN apt-get update && apt-get install -y \
   curl python3 ffmpeg \
   && rm -rf /var/lib/apt/lists/*
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2023.07.06/yt-dlp -o /usr/local/bin/yt-dlp
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2024.04.09/yt-dlp -o /usr/local/bin/yt-dlp
 RUN chmod a+rx /usr/local/bin/yt-dlp
 ENTRYPOINT ["./tgreddit"]
