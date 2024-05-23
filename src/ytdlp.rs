@@ -46,7 +46,10 @@ pub fn download(url: &str) -> Result<(Video, TempDir)> {
     for line_result in lines {
         match line_result {
             Ok(line) => info!("{line}"),
-            Err(_) => panic!("failed to read line"),
+            Err(_) => {
+                error!("failed to read yt-dlp output");
+                return Err(anyhow::anyhow!("failed to read yt-dlp output"));
+            }
         }
     }
 
