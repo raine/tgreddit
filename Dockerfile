@@ -1,9 +1,9 @@
 # Build stages pinned to amd64 to avoid slow QEMU emulation for Rust compilation.
 # Cross-compilation is used for arm64 targets instead.
 
-FROM --platform=linux/amd64 rust:1.86.0-slim-bookworm as chef
+FROM --platform=linux/amd64 rust:1.90.0-slim-bookworm as chef
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-  cargo install cargo-chef
+  cargo install cargo-chef --locked
 
 FROM --platform=linux/amd64 chef as planner
 WORKDIR /app
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo chef cook --release --target x86_64-unknown-linux-gnu --recipe-path recipe.json --features vendored-openssl; \
   fi
 
-FROM --platform=linux/amd64 rust:1.86.0-slim-bookworm as builder
+FROM --platform=linux/amd64 rust:1.90.0-slim-bookworm as builder
 ARG TARGETARCH
 WORKDIR /app
 RUN rustup target add aarch64-unknown-linux-gnu
