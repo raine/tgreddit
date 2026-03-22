@@ -1,18 +1,18 @@
 use anyhow::Result;
 use duct::cmd;
-use lazy_static::lazy_static;
 use log::{error, info};
 use std::{
     ffi::OsString,
     fs,
     io::{BufRead, BufReader},
     path::Path,
+    sync::LazyLock,
 };
 
 use crate::types::*;
 
 use regex::Regex;
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 fn make_ytdlp_args(output: &Path, url: &str) -> Vec<OsString> {
     vec![
@@ -28,7 +28,7 @@ fn make_ytdlp_args(output: &Path, url: &str) -> Vec<OsString> {
 
 /// Downloads given url with yt-dlp and returns path to video
 pub fn download(url: &str) -> Result<(Video, TempDir)> {
-    let tmp_dir = TempDir::new("tgreddit")?;
+    let tmp_dir = TempDir::with_prefix("tgreddit")?;
     let tmp_path = tmp_dir.path();
     let ytdlp_args = make_ytdlp_args(tmp_dir.path(), url);
 
@@ -72,13 +72,12 @@ pub fn download(url: &str) -> Result<(Video, TempDir)> {
     Ok((video, tmp_dir))
 }
 
-fn parse_dimensions_from_path(path: &Path) -> Option<(u16, u16)> {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r"_(?P<width>\d+)x(?P<height>\d+)\.").unwrap();
-    }
+static DIMENSIONS_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"_(?P<width>\d+)x(?P<height>\d+)\.").unwrap());
 
+fn parse_dimensions_from_path(path: &Path) -> Option<(u16, u16)> {
     let path_str = path.to_string_lossy();
-    let caps = RE.captures(&path_str)?;
+    let caps = DIMENSIONS_RE.captures(&path_str)?;
     let width = caps.name("width")?.as_str().parse::<u16>().ok()?;
     let height = caps.name("height")?.as_str().parse::<u16>().ok()?;
 

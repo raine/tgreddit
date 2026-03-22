@@ -12,7 +12,6 @@ duct = "0.13.5"
 env_logger = "0.9.0"
 getopts = "0.2.21"
 itertools = "0.10.3"
-lazy_static = "1.4.0"
 log = "0.4.17"
 regex = { version = "1.6.0", default-features = false, features = ["std", "unicode-perl"] }
 rusqlite = { version = "0.28.0", features = ["chrono", "bundled"] }
@@ -25,7 +24,7 @@ signal-hook = "0.3.14"
 strum = "0.24.1"
 strum_macros = "0.24.3"
 teloxide = { version = "0.12.2", features = ["macros", "auto-send"] }
-tempdir = "0.3.7"
+tempfile = "3"
 thiserror = "1.0.34"
 tokio = { version = "1.21.0", features = ["rt-multi-thread", "macros", "sync"] }
 toml = "0.5.9"

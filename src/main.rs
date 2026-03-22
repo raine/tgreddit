@@ -23,7 +23,7 @@ use teloxide::{
     types::InputMediaPhoto,
 };
 use teloxide::{prelude::*, types::InputMedia};
-use tempdir::TempDir;
+use tempfile::TempDir;
 use tokio::sync::broadcast;
 
 mod args;

@@ -1,8 +1,7 @@
 use crate::*;
 use anyhow::Result;
-use lazy_static::lazy_static;
 use regex::Regex;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use teloxide::{
     dispatching::DefaultKey,
     utils::command::{BotCommands, ParseError},
@@ -189,13 +188,12 @@ pub async fn handle_command(
     Ok(())
 }
 
+static SUBREDDIT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[^\s]+").unwrap());
+static LIMIT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\blimit=(\d+)\b").unwrap());
+static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\btime=(\w+)\b").unwrap());
+static FILTER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bfilter=(\w+)\b").unwrap());
+
 fn parse_subscribe_message(input: String) -> Result<(SubscriptionArgs,), ParseError> {
-    lazy_static! {
-        static ref SUBREDDIT_RE: Regex = Regex::new(r"^[^\s]+").unwrap();
-        static ref LIMIT_RE: Regex = Regex::new(r"\blimit=(\d+)\b").unwrap();
-        static ref TIME_RE: Regex = Regex::new(r"\btime=(\w+)\b").unwrap();
-        static ref FILTER_RE: Regex = Regex::new(r"\bfilter=(\w+)\b").unwrap();
-    }
 
     let subreddit_match = SUBREDDIT_RE
         .find(&input)
