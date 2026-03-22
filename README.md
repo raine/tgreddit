@@ -1,29 +1,41 @@
-# tgreddit
+<h1 align="center">tgreddit</h1>
 
-A telegram bot that gives you a feed of top posts from your favorite subreddits.
+<p align="center">
+  <strong>Reddit's top posts, delivered to Telegram</strong>
+</p>
 
-The killer feature: No need to visit Reddit, as all media is embedded thanks to
-[yt-dlp][yt-dlp] and Telegram's excellent media support.
+<p align="center">
+  <a href="#installation">Install</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#deployment">Deployment</a>
+</p>
 
-Intended to be self-hosted, as Reddit's API has rate-limiting and downloading
-videos with `yt-dlp` can be resource intensive. The simplest way to self-host is
-to use the prebuilt [docker image](#docker-image) that includes necessary
-dependencies.
+---
 
-<img align=left src="https://user-images.githubusercontent.com/11027/178097057-83b27933-9876-405a-b151-a148960819df.jpeg" width=20% height=20%>
-<img align=left src="https://user-images.githubusercontent.com/11027/178096986-5f651336-8208-4c40-9c41-58c95173b24d.jpeg" width=20% height=20%>
-<img src="https://user-images.githubusercontent.com/11027/178099572-e55c7f3c-986b-4804-8540-1004b36950df.jpeg" width=20% height=20%>
+A self-hosted Telegram bot that monitors your favorite subreddits and sends you
+the top posts. All media is embedded directly in Telegram thanks to
+[yt-dlp][yt-dlp] — no need to open Reddit.
 
-## install
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/11027/178097057-83b27933-9876-405a-b151-a148960819df.jpeg" width="20%">
+  <img src="https://user-images.githubusercontent.com/11027/178096986-5f651336-8208-4c40-9c41-58c95173b24d.jpeg" width="20%">
+  <img src="https://user-images.githubusercontent.com/11027/178099572-e55c7f3c-986b-4804-8540-1004b36950df.jpeg" width="20%">
+</p>
 
-### prebuilt binary
+## Installation
+
+Requires [yt-dlp][yt-dlp] and [ffmpeg][ffmpeg] at runtime for media downloads.
+
+### Script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/raine/tgreddit/master/scripts/install.sh | bash
 ```
 
-Or download directly from
-[GitHub releases](https://github.com/raine/tgreddit/releases/latest):
+### Pre-built binaries
+
+Download from [GitHub releases](https://github.com/raine/tgreddit/releases/latest):
 
 | Platform              | Download                                                                                                                |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -32,36 +44,36 @@ Or download directly from
 | macOS (Apple Silicon) | [tgreddit-darwin-arm64.tar.gz](https://github.com/raine/tgreddit/releases/latest/download/tgreddit-darwin-arm64.tar.gz) |
 | macOS (Intel)         | [tgreddit-darwin-x64.tar.gz](https://github.com/raine/tgreddit/releases/latest/download/tgreddit-darwin-x64.tar.gz)     |
 
-### cargo
+### Cargo
 
-```sh
+```bash
 cargo install tgreddit
 ```
 
-### requirements
+### Docker
 
-Depends on [yt-dlp][yt-dlp] (and for good results, yt-dlp requires ffmpeg).
+Pre-built image with all dependencies included:
 
-## bot commands
+```bash
+docker pull rainevi/tgreddit
+```
+
+See [Docker deployment](#docker) below.
+
+## Commands
 
 ### `/sub <subreddit> [limit=<limit>] [time=<time>] [filter=<filter>]`
 
-Add a subscription to subreddit's top posts with optional options. Subscriptions
-are conversation specific, and may be added in channels where the bot is
-participating or in private chats with the bot.
+Subscribe to a subreddit's top posts. Subscriptions are per-conversation — add
+them in channels or private chats.
 
-If the options are not given, when checking for new posts, the program will
-default to configuration in config.toml, if any.
+```
+/sub AnimalsBeingJerks limit=5 time=week filter=video
+```
 
-Example: `/sub AnimalsBeingJerks limit=5 time=week filter=video`
-
-Explanation: Subscribe to top posts in r/AnimalsBeingJerks so that the top 5
-posts of the weekly top list are considered. Whenever a new post appears among
-those top 5 posts, they will be posted in the conversation.
-
-See the
-[example configuration](#example-toml-configuration-with-the-options-explained)
-below for further explanation on `limit`, `time`, and `filter`.
+This watches the top 5 weekly posts in r/AnimalsBeingJerks and sends any new
+ones that appear. See [configuration](#configuration) for what `limit`, `time`,
+and `filter` mean.
 
 ### `/unsub <subreddit>`
 
@@ -69,181 +81,165 @@ Remove a subscription from the current conversation.
 
 ### `/listsubs`
 
-List all subreddit subscriptions for the current conversation.
+List all subscriptions for the current conversation.
 
 ### `/get <subreddit> [limit=<limit>] [time=<time>] [filter=<filter>]`
 
-Get the current top posts similarly to how subscribing to a subreddit would
-return new posts.
+One-shot fetch of current top posts without subscribing.
 
-## configuration
+## Configuration
 
-### env vars
+### Environment variables
 
-- `CONFIG_PATH`: Path to TOML configuration file. **required**
-- `RUST_LOG`: Logging level. `info` recommended to see meaningful output.
+| Variable      | Description                              |
+| ------------- | ---------------------------------------- |
+| `CONFIG_PATH` | Path to TOML configuration file. **Required** |
+| `RUST_LOG`    | Log level. `info` recommended.           |
 
-### example toml configuration with the options explained
+### Config file
 
-Example config without comments:
-[config.example.toml](https://raw.githubusercontent.com/raine/tgreddit/master/config.example.toml)
+Full example: [config.example.toml](config.example.toml)
 
 ```toml
-# Path to a SQLite database used to track seen posts.
+# Path to SQLite database for tracking seen posts.
 # Optional. Defaults to $HOME/.local/state/tgreddit/data.db3.
 db_path = "/path/to/data.db3"
 
-# List of Telegram user ids that can use the commands provided by the bot.
-authorized_users = [
-  123123123
-]
+# Telegram user IDs allowed to use bot commands.
+authorized_user_ids = [123123123]
 
-# Token of your Telegram bot - you get this from @botfather.
+# Bot token from @BotFather.
 telegram_bot_token = "..."
 
-# How often to query each configured subreddit for new posts. Applies only if
-# keep_running is enabled.
+# How often to check for new posts (seconds).
 check_interval_secs = 600
 
-# Whether posts seen on the first check of a new subreddit are considered new
-# or not. Generally having this enabled is better unless you want multiple new
-# messages when a new subreddit is added.
-# Optional. Defaults to true.
+# Skip sending posts found on first check of a new subreddit.
+# Prevents a flood of messages when adding a subscription.
+# Optional. Default: true.
 skip_initial_send = true
 
-# Set the post comments links to use an alternative frontend. Useful as the
-# official Reddit web app is increasingly user hostile on mobile. Possible
-# alternative frontends include teddit.net and libredd.it, but you can use any.
-# Optional. Defaults to official Reddit.
+# Use an alternative Reddit frontend for comment links.
+# Optional. Default: official Reddit.
 links_base_url = "https://teddit.net"
 
-# Set default limit of posts to fetch for each subreddit. Used when not
-# specified for a subreddit in the /sub command.
-#
-# Explanation in more detail: Whenever the bot gets the list of top posts for a
-# subreddit, it will only consider the first <limit> posts. For example, if
-# your limit is 5, the first time around bot will see 5 new posts and mark those
-# as seen and not post anything because it's the first check. Next time around, if
-# there's an unseen post among those 5 top posts, it will be posted in Telegram.
-#
-# So essentially larger the number used as limit, the more posts you can
-# expect to see. For example, with time=month and limit=1 you would see a new post
-# only when the montly top post changes, which is not that often.
-#
-# Optional. The default is 1.
+# Default number of top posts to consider per subreddit.
+# Higher = more posts. With limit=1, you only see when the #1 post changes.
+# Optional. Default: 1.
 default_limit = 1
 
-# Set default time period of top list fetched. Used when not specified for a
-# subreddit. String and one of: hour, day, week, month, year, all.
-# Optional. The default is `day`.
+# Default time period for top posts: hour, day, week, month, year, all.
+# Optional. Default: day.
 default_time = "day"
 
-# Set default filter for post type. When fetching for new posts, only posts
-# matching the filter are considered.
-# String and one of: image, video, link, self_text, gallery
-# Optional and unset by default, meaning all post types are considered.
+# Default post type filter: image, video, link, self_text, gallery.
+# Optional. Default: unset (all types).
 default_filter = "video"
 ```
 
-Perhaps the simplest way to determine a Telegram channel's ID is to open the
-channel in [Telegram Web client][telegram-web] and observing the numeric value
-in page URL.
+> **Tip**: The easiest way to find a Telegram channel's ID is to open it in
+> [Telegram Web][telegram-web] and look at the numeric value in the URL.
 
-## development
+## Deployment
 
-The project uses [`just`][just], [`direnv`][direnv] and [`entr`][entr].
+### Docker
 
-```sh
-$ just dev
-```
-
-## docker image
-
-There's a prebuilt Docker image with dependencies included at
-[rainevi/tgreddit](https://hub.docker.com/repository/docker/rainevi/tgreddit).
-
-Of course, you may also build your own using from the
-[Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
-
-## systemd service
-
-Example setup for running tgreddit as a systemd service on a Linux server or
-Raspberry Pi.
-
-1. Install tgreddit, its runtime dependencies, and create a dedicated user:
+Pre-built image with yt-dlp and ffmpeg included:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/raine/tgreddit/master/scripts/install.sh | bash
-sudo apt install -y ffmpeg python3
-sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-sudo chmod a+rx /usr/local/bin/yt-dlp
-sudo useradd -r -s /usr/sbin/nologin tgreddit
-sudo mkdir -p /opt/tgreddit /var/lib/tgreddit
-sudo chown tgreddit:tgreddit /var/lib/tgreddit
+docker run -d \
+  -v /path/to/config.toml:/app/config.toml \
+  -v /path/to/data:/data \
+  -e CONFIG_PATH=/app/config.toml \
+  -e RUST_LOG=info \
+  rainevi/tgreddit
 ```
 
-2. Copy the binary and create a config file:
+Image available at [rainevi/tgreddit](https://hub.docker.com/r/rainevi/tgreddit)
+for both `linux/amd64` and `linux/arm64`.
+
+### systemd
+
+Example setup for running on a Linux server or Raspberry Pi.
+
+1. **Install tgreddit and runtime dependencies:**
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/raine/tgreddit/master/scripts/install.sh | bash
+   sudo apt install -y ffmpeg python3
+   sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+   sudo chmod a+rx /usr/local/bin/yt-dlp
+   ```
+
+2. **Create a dedicated user and directories:**
+
+   ```bash
+   sudo useradd -r -s /usr/sbin/nologin tgreddit
+   sudo mkdir -p /opt/tgreddit /var/lib/tgreddit
+   sudo chown tgreddit:tgreddit /var/lib/tgreddit
+   sudo cp "$(which tgreddit)" /opt/tgreddit/tgreddit
+   sudo cp config.example.toml /opt/tgreddit/config.toml
+   # Edit /opt/tgreddit/config.toml with your settings
+   ```
+
+3. **Create `/etc/systemd/system/tgreddit.service`:**
+
+   ```ini
+   [Unit]
+   Description=tgreddit
+   Documentation=https://github.com/raine/tgreddit
+   After=network-online.target
+   Wants=network-online.target
+
+   [Service]
+   Type=simple
+   User=tgreddit
+   Group=tgreddit
+   WorkingDirectory=/opt/tgreddit
+   Environment=CONFIG_PATH=/opt/tgreddit/config.toml
+   Environment=RUST_LOG=info
+   ExecStart=/opt/tgreddit/tgreddit
+   Restart=on-failure
+   RestartSec=5
+
+   NoNewPrivileges=yes
+   ProtectSystem=strict
+   ProtectHome=yes
+   PrivateTmp=yes
+   ReadWritePaths=/var/lib/tgreddit
+   RestrictSUIDSGID=yes
+   ProtectKernelTunables=yes
+   ProtectControlGroups=yes
+   DevicePolicy=closed
+   RestrictRealtime=yes
+   LockPersonality=yes
+
+   StandardOutput=journal
+   StandardError=journal
+   SyslogIdentifier=tgreddit
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+4. **Enable and start:**
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now tgreddit
+   sudo journalctl -u tgreddit -f   # follow logs
+   ```
+
+## Development
+
+The project uses [`just`][just], [`direnv`][direnv] and [`entr`][entr].
 
 ```bash
-sudo cp "$(which tgreddit)" /opt/tgreddit/tgreddit
-sudo cp config.example.toml /opt/tgreddit/config.toml
-# Edit /opt/tgreddit/config.toml with your settings
+just dev
 ```
-
-3. Create the service file at `/etc/systemd/system/tgreddit.service`:
-
-```ini
-[Unit]
-Description=tgreddit
-Documentation=https://github.com/raine/tgreddit
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=tgreddit
-Group=tgreddit
-WorkingDirectory=/opt/tgreddit
-Environment=CONFIG_PATH=/opt/tgreddit/config.toml
-Environment=RUST_LOG=info
-ExecStart=/opt/tgreddit/tgreddit
-Restart=on-failure
-RestartSec=5
-
-# Security hardening
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-ReadWritePaths=/var/lib/tgreddit
-RestrictSUIDSGID=yes
-ProtectKernelTunables=yes
-ProtectControlGroups=yes
-DevicePolicy=closed
-RestrictRealtime=yes
-LockPersonality=yes
-
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=tgreddit
-
-[Install]
-WantedBy=multi-user.target
-```
-
-4. Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now tgreddit
-sudo journalctl -u tgreddit -f   # follow logs
-```
-
-## have an idea, question or a bug report?
-
-Feel free to open an issue or start a new discussion.
 
 [yt-dlp]: https://github.com/yt-dlp/yt-dlp
+[ffmpeg]: https://ffmpeg.org/
 [telegram-web]: https://web.telegram.org/
 [just]: https://github.com/casey/just
 [direnv]: https://direnv.net/
