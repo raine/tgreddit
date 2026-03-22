@@ -75,6 +75,10 @@ per-conversation — add them in channels or private chats.
 - **`filter`** — only send certain post types: `image`, `video`, `link`,
   `self_text`, `gallery`.
 
+When called with just a subreddit name, the bot replies with an inline keyboard
+to configure settings interactively. If you already know the parameters you
+want, pass them directly:
+
 ```
 /sub AnimalsBeingJerks
 /sub AnimalsBeingJerks time=week limit=5
