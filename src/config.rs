@@ -1,5 +1,5 @@
 use log::error;
-use secrecy::{ExposeSecret, Secret};
+use secrecy::SecretString;
 use serde::Deserialize;
 use std::{env, path::PathBuf};
 
@@ -11,21 +11,6 @@ use crate::{
 const CONFIG_PATH_ENV: &str = "CONFIG_PATH";
 pub const DEFAULT_LIMIT: u32 = 1;
 pub const DEFAULT_TIME_PERIOD: TopPostsTimePeriod = TopPostsTimePeriod::Day;
-
-#[derive(Debug, Deserialize)]
-pub struct SecretString(Secret<String>);
-
-impl SecretString {
-    pub fn expose_secret(&self) -> &str {
-        self.0.expose_secret()
-    }
-}
-
-impl Default for SecretString {
-    fn default() -> Self {
-        SecretString(Secret::new("".to_string()))
-    }
-}
 
 #[derive(Deserialize, Debug, Default)]
 pub struct Config {
