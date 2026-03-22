@@ -172,6 +172,11 @@ async fn check_new_posts(app: &AppState) -> Result<()> {
 }
 
 async fn check_new_posts_for_subscription(app: &AppState, sub: &Subscription) -> Result<()> {
+    if sub.paused {
+        debug!("subscription for r/{} is paused, skipping", sub.subreddit);
+        return Ok(());
+    }
+
     let subreddit = &sub.subreddit;
     let limit = sub
         .limit

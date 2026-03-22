@@ -10,11 +10,13 @@ pub struct Video {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Subscription {
+    pub id: i64,
     pub chat_id: i64,
     pub subreddit: String,
     pub limit: Option<u32>,
     pub time: Option<TopPostsTimePeriod>,
     pub filter: Option<PostType>,
+    pub paused: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

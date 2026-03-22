@@ -1,7 +1,7 @@
 use crate::{config::*, reddit::*, types::*};
 use anyhow::{Context, Result};
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Value, ValueRef};
-use rusqlite::{Connection, Row, named_params};
+use rusqlite::{Connection, OptionalExtension, Row, named_params, params};
 use rusqlite_migration::{M, Migrations};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -29,6 +29,23 @@ const MIGRATIONS: &[&str] = &[
         primary key (subreddit, chat_id)
     ) strict;
 ",
+    "
+    create table subscription_new(
+        id          integer primary key autoincrement,
+        chat_id     integer not null,
+        subreddit   text not null,
+        created_at  text not null,
+        post_limit  integer,
+        time        text,
+        filter      text,
+        paused      integer not null default 0,
+        unique(subreddit, chat_id)
+    ) strict;
+    insert into subscription_new (chat_id, subreddit, created_at, post_limit, time, filter)
+        select chat_id, subreddit, created_at, post_limit, time, filter from subscription;
+    drop table subscription;
+    alter table subscription_new rename to subscription;
+    ",
 ];
 
 #[derive(Debug)]
@@ -121,6 +138,80 @@ impl Database {
         .map_err(anyhow::Error::from)
     }
 
+    pub fn get_subscription_by_id(&self, id: i64) -> Result<Option<Subscription>> {
+        let mut stmt = self.conn.prepare(
+            "
+            select id, chat_id, subreddit, post_limit, time, filter, paused
+            from subscription
+            where id = ?
+            ",
+        )?;
+        let sub = stmt
+            .query_row([id], |row| Subscription::try_from(row))
+            .optional()?;
+        Ok(sub)
+    }
+
+    pub fn set_subscription_limit(&self, id: i64, limit: Option<u32>) -> Result<()> {
+        self.conn.execute(
+            "update subscription set post_limit = ?1 where id = ?2",
+            params![limit, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_subscription_time(&self, id: i64, time: Option<TopPostsTimePeriod>) -> Result<()> {
+        self.conn.execute(
+            "update subscription set time = ?1 where id = ?2",
+            params![time, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_subscription_filter(&self, id: i64, filter: Option<PostType>) -> Result<()> {
+        self.conn.execute(
+            "update subscription set filter = ?1 where id = ?2",
+            params![filter, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn toggle_subscription_pause(&self, id: i64) -> Result<bool> {
+        self.conn.execute(
+            "update subscription set paused = 1 - paused where id = ?",
+            [id],
+        )?;
+        let paused: i64 = self.conn.query_row(
+            "select paused from subscription where id = ?",
+            [id],
+            |row| row.get(0),
+        )?;
+        Ok(paused != 0)
+    }
+
+    pub fn unsubscribe_by_id(&self, id: i64) -> Result<String> {
+        let mut stmt = self.conn.prepare(
+            "
+            delete from subscription where id = :id
+            returning subreddit, chat_id
+            ",
+        )?;
+        let (subreddit, chat_id): (String, i64) = stmt
+            .query_row(named_params! { ":id": id }, |row| {
+                Ok((row.get("subreddit")?, row.get("chat_id")?))
+            })
+            .context("subscription not found")?;
+
+        self.conn
+            .execute(
+                "delete from post where chat_id = :chat_id and subreddit = :subreddit",
+                named_params! { ":chat_id": chat_id, ":subreddit": subreddit },
+            )
+            .context("could not delete posts")?;
+
+        Ok(subreddit)
+    }
+
     pub fn subscribe(&self, chat_id: i64, args: &SubscriptionArgs) -> Result<()> {
         let mut stmt = self.conn.prepare(
             "
@@ -175,11 +266,10 @@ impl Database {
         Ok(deleted_subreddit)
     }
 
-    #[allow(dead_code)]
     pub fn get_subscriptions_for_chat(&self, chat_id: i64) -> Result<Vec<Subscription>> {
         let mut stmt = self.conn.prepare(
             "
-            select chat_id, subreddit, post_limit, time, filter, created_at
+            select id, chat_id, subreddit, post_limit, time, filter, paused
             from subscription
             where chat_id = ?
             ",
@@ -195,7 +285,7 @@ impl Database {
     pub fn get_all_subscriptions(&self) -> Result<Vec<Subscription>> {
         let mut stmt = self.conn.prepare(
             "
-            select chat_id, subreddit, post_limit, time, filter, created_at
+            select id, chat_id, subreddit, post_limit, time, filter, paused
             from subscription
             ",
         )?;
@@ -238,12 +328,15 @@ impl TryFrom<&Row<'_>> for Subscription {
     type Error = rusqlite::Error;
 
     fn try_from(row: &Row<'_>) -> Result<Self, Self::Error> {
+        let paused: i64 = row.get_unwrap("paused");
         Ok(Self {
+            id: row.get_unwrap("id"),
             subreddit: row.get_unwrap("subreddit"),
             chat_id: row.get_unwrap("chat_id"),
             limit: row.get_unwrap("post_limit"),
             time: row.get_unwrap("time"),
             filter: row.get_unwrap("filter"),
+            paused: paused != 0,
         })
     }
 }
@@ -295,11 +388,13 @@ mod tests {
         assert_eq!(
             subs,
             vec![Subscription {
+                id: 1,
                 chat_id: 1,
                 subreddit: "test".to_string(),
                 limit: Some(1),
                 time: Some(TopPostsTimePeriod::Week),
                 filter: Some(PostType::Video),
+                paused: false,
             }]
         );
     }

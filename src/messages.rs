@@ -45,6 +45,7 @@ pub fn format_link_message_html(post: &reddit::Post, links_base_url: Option<&str
     format!("{title}\n{meta}")
 }
 
+#[allow(dead_code)]
 pub fn format_subscription_list(post: &[Subscription]) -> String {
     fn format_subscription(sub: &Subscription) -> String {
         let mut args = vec![];
@@ -98,18 +99,22 @@ mod tests {
         assert_eq!(
             format_subscription_list(&[
                 Subscription {
+                    id: 0,
                     chat_id: 1,
                     subreddit: "foo".to_owned(),
                     limit: None,
                     time: None,
                     filter: None,
+                    paused: false,
                 },
                 Subscription {
+                    id: 0,
                     chat_id: 1,
                     subreddit: "bar".to_owned(),
                     limit: Some(1),
                     time: Some(TopPostsTimePeriod::Week),
                     filter: None,
+                    paused: false,
                 },
             ]),
             "foo\nbar (time=week, limit=1)"
