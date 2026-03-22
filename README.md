@@ -62,18 +62,24 @@ See [Docker deployment](#docker) below.
 
 ## Commands
 
-### `/sub <subreddit> [limit=<limit>] [time=<time>] [filter=<filter>]`
+### `/sub <subreddit> [time=<time>] [limit=<limit>] [filter=<filter>]`
 
-Subscribe to a subreddit's top posts. Subscriptions are per-conversation — add
-them in channels or private chats.
+Subscribe to a subreddit's top posts. The bot periodically checks the
+subreddit's top posts and sends you any new ones that appear. Subscriptions are
+per-conversation — add them in channels or private chats.
+
+- **`time`** — the time window to watch: `hour`, `day`, `week`, `month`,
+  `year`, `all`. Think of it as "top posts of the ___". Default: `day`.
+- **`limit`** — how many top posts to watch. With `limit=3`, you'll see posts
+  as they enter the top 3. Higher means more posts. Default: `1`.
+- **`filter`** — only send certain post types: `image`, `video`, `link`,
+  `self_text`, `gallery`.
 
 ```
-/sub AnimalsBeingJerks limit=5 time=week filter=video
+/sub AnimalsBeingJerks
+/sub AnimalsBeingJerks time=week limit=5
+/sub AnimalsBeingJerks time=week filter=video
 ```
-
-This watches the top 5 weekly posts in r/AnimalsBeingJerks and sends any new
-ones that appear. See [configuration](#configuration) for what `limit`, `time`,
-and `filter` mean.
 
 ### `/unsub <subreddit>`
 
@@ -83,9 +89,10 @@ Remove a subscription from the current conversation.
 
 List all subscriptions for the current conversation.
 
-### `/get <subreddit> [limit=<limit>] [time=<time>] [filter=<filter>]`
+### `/get <subreddit> [time=<time>] [limit=<limit>] [filter=<filter>]`
 
-One-shot fetch of current top posts without subscribing.
+One-shot fetch of current top posts without subscribing. Accepts the same
+`time`, `limit`, and `filter` options as `/sub`.
 
 ## Configuration
 
@@ -123,14 +130,15 @@ skip_initial_send = true
 # Optional. Default: official Reddit.
 links_base_url = "https://teddit.net"
 
-# Default number of top posts to consider per subreddit.
-# Higher = more posts. With limit=1, you only see when the #1 post changes.
-# Optional. Default: 1.
-default_limit = 1
-
-# Default time period for top posts: hour, day, week, month, year, all.
+# Default time window for top posts: hour, day, week, month, year, all.
+# Think of it as "top posts of the ___".
 # Optional. Default: day.
 default_time = "day"
+
+# Default number of top posts to watch per subreddit.
+# With limit=3, you'll see posts as they enter the top 3.
+# Optional. Default: 1.
+default_limit = 1
 
 # Default post type filter: image, video, link, self_text, gallery.
 # Optional. Default: unset (all types).
