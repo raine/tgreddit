@@ -1,7 +1,8 @@
-use crate::{download::*, types::*};
+use crate::{download::*, state::AppState, types::*};
 use anyhow::{Context, Result};
 use log::*;
 use reddit::{PostType, TopPostsTimePeriod};
+use secrecy::ExposeSecret;
 use signal_hook::{
     consts::signal::{SIGINT, SIGTERM},
     iterator::Signals,
@@ -18,6 +19,7 @@ use std::{
     time::Duration,
 };
 use teloxide::types::InputFile;
+use teloxide::utils::command::BotCommands;
 use teloxide::{
     payloads::{SendMessageSetters, SendPhotoSetters, SendVideoSetters},
     types::{InputMediaPhoto, LinkPreviewOptions},
@@ -33,6 +35,7 @@ mod db;
 mod download;
 mod messages;
 mod reddit;
+mod state;
 mod types;
 mod ytdlp;
 
@@ -43,13 +46,22 @@ async fn main() -> Result<()> {
     env_logger::init();
     let config = Arc::new(config::read_config());
     info!("starting with config: {config:#?}");
+
+    let http = reqwest::Client::builder()
+        .user_agent(reddit::api::APP_USER_AGENT)
+        .build()?;
+
     let mut db = db::Database::open(&config)?;
     db.migrate()?;
-    drop(db);
+
+    let tg = Arc::new(Bot::new(config.telegram_bot_token.expose_secret()));
+    tg.set_my_commands(bot::Command::bot_commands()).await?;
+
+    let app = Arc::new(AppState::new(config.clone(), http, tg.clone(), db));
 
     let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     let shutdown = Arc::new(AtomicBool::new(false));
-    let bot = bot::MyBot::new(config.clone()).await?;
+    let bot = bot::MyBot::new(tg, app.clone());
 
     // Any arguments are for things that help with debugging and development
     // Not optimized for usability.
@@ -58,25 +70,27 @@ async fn main() -> Result<()> {
     //        tgreddit --debug-post <linkid> --chat-id <chatid> => Also send to telegram
     let opts = args::parse_args();
     if let Some(post_id) = opts.opt_str("debug-post") {
-        let post = reddit::get_link(&post_id).await.unwrap();
+        let post = reddit::get_link(&app.http, &post_id).await.unwrap();
         info!("{:#?}", post);
         if let Some(chat_id) = opts.opt_str("chat-id") {
-            return handle_new_post(&config, &bot.tg, chat_id.parse().unwrap(), &post).await;
+            return handle_new_post(&app, chat_id.parse().unwrap(), &post).await;
         }
         return Ok(());
     }
 
+    let (bot_handle, bot_shutdown_token) = bot.spawn();
+
     let sub_check_loop_handle = {
         let shutdown = shutdown.clone();
-        let tg = bot.tg.clone();
+        let app = app.clone();
         tokio::task::spawn(async move {
             while !shutdown.load(Ordering::Acquire) {
-                check_new_posts(&config, &tg).await.unwrap_or_else(|err| {
+                check_new_posts(&app).await.unwrap_or_else(|err| {
                     error!("failed to check for new posts: {err}");
                 });
 
                 tokio::select! {
-                   _ = tokio::time::sleep(Duration::from_secs(config.check_interval_secs)) => {}
+                   _ = tokio::time::sleep(Duration::from_secs(app.config.check_interval_secs)) => {}
                    _ = shutdown_rx.recv() => {
                        break
                    }
@@ -84,7 +98,6 @@ async fn main() -> Result<()> {
             }
         })
     };
-    let (bot_handle, bot_shutdown_token) = bot.spawn();
 
     {
         let shutdown = shutdown.clone();
@@ -111,17 +124,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn handle_new_video_post(
-    config: &config::Config,
-    tg: &Bot,
-    chat_id: i64,
-    post: &reddit::Post,
-) -> Result<()> {
+async fn handle_new_video_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
     // The temporary directory will be deleted when _tmp_dir is dropped
     let (video, _tmp_dir) = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
     info!("got a video: {video:?}");
-    let caption = messages::format_media_caption_html(post, config.links_base_url.as_deref());
-    tg.send_video(ChatId(chat_id), InputFile::file(&video.path))
+    let caption = messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
+    app.tg
+        .send_video(ChatId(chat_id), InputFile::file(&video.path))
         .parse_mode(teloxide::types::ParseMode::Html)
         .caption(&caption)
         .height(video.height.into())
@@ -134,18 +143,14 @@ async fn handle_new_video_post(
     Ok(())
 }
 
-async fn handle_new_image_post(
-    config: &config::Config,
-    tg: &Bot,
-    chat_id: i64,
-    post: &reddit::Post,
-) -> Result<()> {
+async fn handle_new_image_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
     match download_url_to_tmp(&post.url).await {
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
             let caption =
-                messages::format_media_caption_html(post, config.links_base_url.as_deref());
-            tg.send_photo(ChatId(chat_id), InputFile::file(path))
+                messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
+            app.tg
+                .send_photo(ChatId(chat_id), InputFile::file(path))
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .caption(&caption)
                 .await?;
@@ -159,28 +164,22 @@ async fn handle_new_image_post(
     }
 }
 
-async fn handle_new_link_post(
-    config: &config::Config,
-    tg: &Bot,
-    chat_id: i64,
-    post: &reddit::Post,
-) -> Result<()> {
-    let message_html = messages::format_link_message_html(post, config.links_base_url.as_deref());
-    tg.send_message(ChatId(chat_id), message_html)
+async fn handle_new_link_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    let message_html =
+        messages::format_link_message_html(post, app.config.links_base_url.as_deref());
+    app.tg
+        .send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
         .await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
 }
 
-async fn handle_new_self_post(
-    config: &config::Config,
-    tg: &Bot,
-    chat_id: i64,
-    post: &reddit::Post,
-) -> Result<()> {
-    let message_html = messages::format_media_caption_html(post, config.links_base_url.as_deref());
-    tg.send_message(ChatId(chat_id), message_html)
+async fn handle_new_self_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    let message_html =
+        messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
+    app.tg
+        .send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
         .link_preview_options(LinkPreviewOptions {
             is_disabled: true,
@@ -211,12 +210,7 @@ async fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBu
     Ok(map)
 }
 
-async fn handle_new_gallery_post(
-    config: &config::Config,
-    tg: &Bot,
-    chat_id: i64,
-    post: &reddit::Post,
-) -> Result<()> {
+async fn handle_new_gallery_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
     // post.gallery_data is an array that describes the order of photos in the gallery, while
     // post.media_metadata is a map that contains the URL for each photo
     let gallery_data_items = &post
@@ -235,8 +229,10 @@ async fn handle_new_gallery_post(
                 let mut input_media_photo = InputMediaPhoto::new(InputFile::file(image_path));
                 // The first InputMediaPhoto in the vector needs to contain the caption and parse_mode;
                 if first {
-                    let caption =
-                        messages::format_media_caption_html(post, config.links_base_url.as_deref());
+                    let caption = messages::format_media_caption_html(
+                        post,
+                        app.config.links_base_url.as_deref(),
+                    );
                     input_media_photo = input_media_photo
                         .caption(&caption)
                         .parse_mode(teloxide::types::ParseMode::Html);
@@ -251,18 +247,15 @@ async fn handle_new_gallery_post(
         }
     }
 
-    tg.send_media_group(ChatId(chat_id), media_group).await?;
+    app.tg
+        .send_media_group(ChatId(chat_id), media_group)
+        .await?;
     info!("gallery uploaded post_id={} chat_id={chat_id}", post.id);
 
     Ok(())
 }
 
-async fn handle_new_post(
-    config: &config::Config,
-    tg: &Bot,
-    chat_id: i64,
-    post: &reddit::Post,
-) -> Result<()> {
+async fn handle_new_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
     info!("got new {post:#?}");
     let mut post = Cow::Borrowed(post);
 
@@ -271,40 +264,39 @@ async fn handle_new_post(
     // TODO: It appears that post with is_gallery=true will never have post_hint set
     if post.post_hint.is_none() {
         info!("post missing post_hint, getting like directly");
-        post = Cow::Owned(reddit::get_link(&post.id).await.unwrap());
+        post = Cow::Owned(reddit::get_link(&app.http, &post.id).await.unwrap());
     }
 
     match post.post_type {
-        reddit::PostType::Image => handle_new_image_post(config, tg, chat_id, &post).await,
-        reddit::PostType::Video => handle_new_video_post(config, tg, chat_id, &post).await,
-        reddit::PostType::Link => handle_new_link_post(config, tg, chat_id, &post).await,
-        reddit::PostType::SelfText => handle_new_self_post(config, tg, chat_id, &post).await,
-        reddit::PostType::Gallery => handle_new_gallery_post(config, tg, chat_id, &post).await,
+        reddit::PostType::Image => handle_new_image_post(app, chat_id, &post).await,
+        reddit::PostType::Video => handle_new_video_post(app, chat_id, &post).await,
+        reddit::PostType::Link => handle_new_link_post(app, chat_id, &post).await,
+        reddit::PostType::SelfText => handle_new_self_post(app, chat_id, &post).await,
+        reddit::PostType::Gallery => handle_new_gallery_post(app, chat_id, &post).await,
         // /r/bestof posts have no characteristics like post_hint that could be used to
         // determine them as a type of Link; as a workaround, post Unknown post types the same way
         // as a link
         reddit::PostType::Unknown => {
             warn!("unknown post type, post={post:?}");
-            handle_new_link_post(config, tg, chat_id, &post).await
+            handle_new_link_post(app, chat_id, &post).await
         }
     }
 }
 
 async fn check_post_newness(
-    config: &config::Config,
-    tg: &Bot,
+    app: &AppState,
     chat_id: i64,
     filter: Option<reddit::PostType>,
     post: &reddit::Post,
     only_mark_seen: bool,
 ) -> Result<()> {
-    let db = db::Database::open(config)?;
     if filter.is_some() && filter.as_ref() != Some(&post.post_type) {
         debug!("filter set and post does not match filter, skipping");
         return Ok(());
     }
 
-    if db
+    if app
+        .db()
         .is_post_seen(chat_id, post)
         .expect("failed to query if post is seen")
     {
@@ -315,23 +307,22 @@ async fn check_post_newness(
     if !only_mark_seen {
         // Intentionally marking post as seen if handling it fails. It's preferable to not have it
         // fail continuously.
-        if let Err(e) = handle_new_post(config, tg, chat_id, post).await {
+        if let Err(e) = handle_new_post(app, chat_id, post).await {
             error!("failed to handle new post: {e}");
         }
     }
 
-    db.mark_post_seen(chat_id, post)?;
+    app.db().mark_post_seen(chat_id, post)?;
     info!("marked post seen: {}", post.id);
 
     Ok(())
 }
 
-async fn check_new_posts(config: &config::Config, tg: &Bot) -> Result<()> {
+async fn check_new_posts(app: &AppState) -> Result<()> {
     info!("checking subscriptions for new posts");
-    let db = db::Database::open(config)?;
-    let subs = db.get_all_subscriptions()?;
+    let subs = app.db().get_all_subscriptions()?;
     for sub in subs {
-        check_new_posts_for_subscription(config, tg, &sub)
+        check_new_posts_for_subscription(app, &sub)
             .await
             .unwrap_or_else(|err| {
                 error!("failed to check subscription for new posts: {err}");
@@ -341,22 +332,17 @@ async fn check_new_posts(config: &config::Config, tg: &Bot) -> Result<()> {
     Ok(())
 }
 
-async fn check_new_posts_for_subscription(
-    config: &config::Config,
-    tg: &Bot,
-    sub: &Subscription,
-) -> Result<()> {
-    let db = db::Database::open(config)?;
+async fn check_new_posts_for_subscription(app: &AppState, sub: &Subscription) -> Result<()> {
     let subreddit = &sub.subreddit;
     let limit = sub
         .limit
-        .or(config.default_limit)
+        .or(app.config.default_limit)
         .unwrap_or(config::DEFAULT_LIMIT);
     let time = sub
         .time
-        .or(config.default_time)
+        .or(app.config.default_time)
         .unwrap_or(config::DEFAULT_TIME_PERIOD);
-    let filter = sub.filter.or(config.default_filter);
+    let filter = sub.filter.or(app.config.default_filter);
     let chat_id = sub.chat_id;
     info!(
         "checking subreddit /r/{subreddit} for new posts for user {chat_id}",
@@ -364,20 +350,21 @@ async fn check_new_posts_for_subscription(
         chat_id = chat_id
     );
 
-    match reddit::get_subreddit_top_posts(subreddit, limit, &time).await {
+    match reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time).await {
         Ok(posts) => {
             debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
 
             // First run should not send anything to telegram but the post should be marked
             // as seen, unless skip_initial_send is enabled
-            let is_new_subreddit = !db
+            let is_new_subreddit = !app
+                .db()
                 .existing_posts_for_subreddit(chat_id, subreddit)
                 .context("failed to query if subreddit has existing posts")?;
-            let only_mark_seen = is_new_subreddit && config.skip_initial_send;
+            let only_mark_seen = is_new_subreddit && app.config.skip_initial_send;
 
             for post in posts {
                 debug!("got {post:?}");
-                check_post_newness(config, tg, chat_id, filter, &post, only_mark_seen)
+                check_post_newness(app, chat_id, filter, &post, only_mark_seen)
                     .await
                     .unwrap_or_else(|err| {
                         error!("failed to check post newness: {err}");

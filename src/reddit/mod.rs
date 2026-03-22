@@ -1,4 +1,4 @@
-mod api;
+pub mod api;
 mod types;
 pub use api::*;
 pub use types::*;

@@ -5,14 +5,10 @@ use thiserror::Error;
 use url::Url;
 
 static REDDIT_BASE_URL: &str = "https://www.reddit.com";
-static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 fn get_base_url() -> Url {
     Url::parse(REDDIT_BASE_URL).unwrap()
-}
-
-fn get_client() -> reqwest::ClientBuilder {
-    reqwest::Client::builder().user_agent(APP_USER_AGENT)
 }
 
 pub fn format_url_from_path(path: &str, base_url: Option<&str>) -> String {
@@ -35,6 +31,7 @@ pub fn format_subreddit_url(subreddit: &str, base_url: Option<&str>) -> String {
 }
 
 pub async fn get_subreddit_top_posts(
+    client: &reqwest::Client,
     subreddit: &str,
     limit: u32,
     time: &TopPostsTimePeriod,
@@ -43,7 +40,6 @@ pub async fn get_subreddit_top_posts(
     let url = get_base_url()
         .join(&format!("/r/{subreddit}/top.json"))
         .unwrap();
-    let client = get_client().build()?;
     let res = client
         .get(url)
         .query(&[
@@ -58,10 +54,9 @@ pub async fn get_subreddit_top_posts(
     Ok(posts)
 }
 
-pub async fn get_link(link_id: &str) -> Result<Post> {
+pub async fn get_link(client: &reqwest::Client, link_id: &str) -> Result<Post> {
     info!("getting link id {link_id}");
     let url = get_base_url().join("/api/info.json")?;
-    let client = get_client().build()?;
     let res = client
         .get(url)
         .query(&[("id", &format!("t3_{link_id}"))])
@@ -111,9 +106,12 @@ pub enum SubredditAboutError {
     IO(#[from] std::io::Error),
 }
 
+/// Uses a separate no-redirect client to detect non-existent subreddits via 302.
+/// Called infrequently (only on /sub command), so building a client here is fine.
 pub async fn get_subreddit_about(subreddit: &str) -> Result<SubredditAbout, SubredditAboutError> {
     info!("getting subreddit about for /r/{subreddit}");
-    let client = get_client()
+    let client = reqwest::Client::builder()
+        .user_agent(APP_USER_AGENT)
         .redirect(reqwest::redirect::Policy::none())
         .build()?;
     let url = get_base_url().join(&format!("/r/{subreddit}/about.json"))?;

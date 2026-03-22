@@ -1,7 +1,7 @@
+use crate::state::AppState;
 use crate::*;
 use anyhow::Result;
 use regex::Regex;
-use secrecy::ExposeSecret;
 use std::sync::{Arc, LazyLock};
 use teloxide::{
     dispatching::DefaultKey,
@@ -31,19 +31,15 @@ pub enum Command {
 
 pub struct MyBot {
     pub dispatcher: Dispatcher<Arc<Bot>, anyhow::Error, DefaultKey>,
-    pub tg: Arc<Bot>,
 }
 
 impl MyBot {
-    pub async fn new(config: Arc<config::Config>) -> Result<Self> {
-        let tg = Arc::new(Bot::new(config.telegram_bot_token.expose_secret()));
-        tg.set_my_commands(Command::bot_commands()).await?;
-
+    pub fn new(tg: Arc<Bot>, app: Arc<AppState>) -> Self {
         let handler = Update::filter_message().branch(
-            dptree::filter(|msg: Message, config: Arc<config::Config>| {
+            dptree::filter(|msg: Message, app: Arc<AppState>| {
                 msg.from
                     .as_ref()
-                    .map(|user| config.authorized_user_ids.contains(&user.id.0))
+                    .map(|user| app.config.authorized_user_ids.contains(&user.id.0))
                     .unwrap_or_default()
             })
             .filter_command::<Command>()
@@ -51,7 +47,7 @@ impl MyBot {
         );
 
         let dispatcher = Dispatcher::builder(tg.clone(), handler)
-            .dependencies(dptree::deps![config.clone()])
+            .dependencies(dptree::deps![app])
             .default_handler(|upd| async move {
                 warn!("unhandled update: {:?}", upd);
             })
@@ -60,11 +56,7 @@ impl MyBot {
             ))
             .build();
 
-        let my_bot = MyBot {
-            dispatcher,
-            tg: tg.clone(),
-        };
-        Ok(my_bot)
+        MyBot { dispatcher }
     }
 
     pub fn spawn(
@@ -85,27 +77,21 @@ pub async fn handle_command(
     message: Message,
     tg: Arc<Bot>,
     command: Command,
-    config: Arc<config::Config>,
+    app: Arc<AppState>,
 ) -> Result<()> {
-    async fn handle(
-        message: &Message,
-        tg: &Bot,
-        command: Command,
-        config: Arc<config::Config>,
-    ) -> Result<()> {
+    async fn handle(message: &Message, tg: &Bot, command: Command, app: &AppState) -> Result<()> {
         match command {
             Command::Help => {
                 tg.send_message(message.chat.id, Command::descriptions().to_string())
                     .await?;
             }
             Command::Sub(mut args) => {
-                let db = db::Database::open(&config)?;
                 let chat_id = message.chat.id.0;
                 let subreddit_about = reddit::get_subreddit_about(&args.subreddit).await;
                 match subreddit_about {
                     Ok(data) => {
                         args.subreddit = data.display_name;
-                        db.subscribe(chat_id, &args)?;
+                        app.db().subscribe(chat_id, &args)?;
                         info!("subscribed in chat id {chat_id} with {args:#?};");
                         tg.send_message(
                             ChatId(chat_id),
@@ -123,18 +109,16 @@ pub async fn handle_command(
                 }
             }
             Command::Unsub(subreddit) => {
-                let db = db::Database::open(&config)?;
                 let chat_id = message.chat.id.0;
                 let subreddit = subreddit.replace("r/", "");
-                let reply = match db.unsubscribe(chat_id, &subreddit) {
+                let reply = match app.db().unsubscribe(chat_id, &subreddit) {
                     Ok(sub) => format!("Unsubscribed from r/{sub}"),
                     Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
                 };
                 tg.send_message(ChatId(chat_id), reply).await?;
             }
             Command::ListSubs => {
-                let db = db::Database::open(&config)?;
-                let subs = db.get_subscriptions_for_chat(message.chat.id.0)?;
+                let subs = app.db().get_subscriptions_for_chat(message.chat.id.0)?;
                 let reply = messages::format_subscription_list(&subs);
                 tg.send_message(message.chat.id, reply).await?;
             }
@@ -142,16 +126,16 @@ pub async fn handle_command(
                 let subreddit = &args.subreddit;
                 let limit = args
                     .limit
-                    .or(config.default_limit)
+                    .or(app.config.default_limit)
                     .unwrap_or(config::DEFAULT_LIMIT);
                 let time = args
                     .time
-                    .or(config.default_time)
+                    .or(app.config.default_time)
                     .unwrap_or(config::DEFAULT_TIME_PERIOD);
-                let filter = args.filter.or(config.default_filter);
+                let filter = args.filter.or(app.config.default_filter);
                 let chat_id = message.chat.id.0;
 
-                let posts = reddit::get_subreddit_top_posts(subreddit, limit, &time)
+                let posts = reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time)
                     .await
                     .context("failed to get posts")?
                     .into_iter()
@@ -168,7 +152,7 @@ pub async fn handle_command(
 
                 if !posts.is_empty() {
                     for post in posts {
-                        if let Err(e) = handle_new_post(&config, tg, chat_id, &post).await {
+                        if let Err(e) = handle_new_post(app, chat_id, &post).await {
                             error!("failed to handle new post: {e}");
                         }
                     }
@@ -181,7 +165,7 @@ pub async fn handle_command(
         Ok(())
     }
 
-    if let Err(err) = handle(&message, &tg, command, config).await {
+    if let Err(err) = handle(&message, &tg, command, &app).await {
         error!("failed to handle message: {}", err);
         tg.send_message(message.chat.id, "Something went wrong")
             .await?;
