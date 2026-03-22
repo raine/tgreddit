@@ -1,4 +1,4 @@
-use crate::{download::*, state::AppState, types::*};
+use crate::{state::AppState, types::*};
 use anyhow::{Context, Result};
 use reddit::{PostType, TopPostsTimePeriod};
 use secrecy::ExposeSecret;
@@ -6,25 +6,13 @@ use signal_hook::{
     consts::signal::{SIGINT, SIGTERM},
     iterator::Signals,
 };
-use std::collections::HashMap;
-use std::string::ToString;
-use std::{
-    borrow::Cow,
-    path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
 };
-use teloxide::types::InputFile;
+use std::time::Duration;
+use teloxide::prelude::*;
 use teloxide::utils::command::BotCommands;
-use teloxide::{
-    payloads::{SendMessageSetters, SendPhotoSetters, SendVideoSetters},
-    types::{InputMediaPhoto, LinkPreviewOptions},
-};
-use teloxide::{prelude::*, types::InputMedia};
-use tempfile::TempDir;
 use tokio::sync::broadcast;
 use tracing::*;
 
@@ -33,6 +21,7 @@ mod bot;
 mod config;
 mod db;
 mod download;
+mod handlers;
 mod messages;
 mod reddit;
 mod state;
@@ -75,7 +64,7 @@ async fn main() -> Result<()> {
         let post = reddit::get_link(&app.http, &post_id).await.unwrap();
         info!("{:#?}", post);
         if let Some(chat_id) = opts.opt_str("chat-id") {
-            return handle_new_post(&app, chat_id.parse().unwrap(), &post).await;
+            return handlers::handle_new_post(&app, chat_id.parse().unwrap(), &post).await;
         }
         return Ok(());
     }
@@ -126,158 +115,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn handle_new_video_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    // The temporary directory will be deleted when _tmp_dir is dropped
-    let (video, _tmp_dir) = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
-    info!("got a video: {video:?}");
-    let caption = messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
-    app.tg
-        .send_video(ChatId(chat_id), InputFile::file(&video.path))
-        .parse_mode(teloxide::types::ParseMode::Html)
-        .caption(&caption)
-        .height(video.height.into())
-        .width(video.width.into())
-        .await?;
-    info!(
-        "video uploaded post_id={} chat_id={chat_id} video={video:?}",
-        post.id
-    );
-    Ok(())
-}
-
-async fn handle_new_image_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    match download_url_to_tmp(&app.http, &post.url).await {
-        Ok((path, _tmp_dir)) => {
-            // path will be deleted when _tmp_dir when goes out of scope
-            let caption =
-                messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
-            app.tg
-                .send_photo(ChatId(chat_id), InputFile::file(path))
-                .parse_mode(teloxide::types::ParseMode::Html)
-                .caption(&caption)
-                .await?;
-            info!("image uploaded post_id={} chat_id={chat_id}", post.id);
-            Ok(())
-        }
-        Err(e) => {
-            error!("failed to download image: {e}");
-            Err(e)
-        }
-    }
-}
-
-async fn handle_new_link_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    let message_html =
-        messages::format_link_message_html(post, app.config.links_base_url.as_deref());
-    app.tg
-        .send_message(ChatId(chat_id), message_html)
-        .parse_mode(teloxide::types::ParseMode::Html)
-        .await?;
-    info!("message sent post_id={} chat_id={chat_id}", post.id);
-    Ok(())
-}
-
-async fn handle_new_self_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    let message_html =
-        messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
-    app.tg
-        .send_message(ChatId(chat_id), message_html)
-        .parse_mode(teloxide::types::ParseMode::Html)
-        .link_preview_options(LinkPreviewOptions {
-            is_disabled: true,
-            url: None,
-            prefer_small_media: false,
-            prefer_large_media: false,
-            show_above_text: false,
-        })
-        .await?;
-    info!("message sent post_id={} chat_id={chat_id}", post.id);
-    Ok(())
-}
-
-async fn handle_new_gallery_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    let gallery_data_items = &post
-        .gallery_data
-        .as_ref()
-        .expect("expected gallery_data to exist in gallery post")
-        .items;
-    let media_metadata_map = post
-        .media_metadata
-        .as_ref()
-        .expect("expected media_metadata to exist in gallery post");
-
-    // Download all gallery images into a single temp directory
-    let tmp_dir = TempDir::with_prefix("tgreddit-gallery")?;
-    let mut downloaded: HashMap<String, PathBuf> = HashMap::new();
-    for (id, media_metadata) in media_metadata_map {
-        let s = &media_metadata.s;
-        let url = &s.url.replace("&amp;", "&");
-        info!("got media id={id} x={} y={} url={}", &s.x, &s.y, url);
-        let path = download::download_url_to_dir(&app.http, url, tmp_dir.path()).await?;
-        downloaded.insert(id.to_string(), path);
-    }
-
-    // Build media group in gallery_data order (which defines display order)
-    let mut media_group = vec![];
-    let mut first = true;
-    for item in gallery_data_items {
-        match downloaded.get(&item.media_id) {
-            Some(image_path) => {
-                let mut input_media_photo = InputMediaPhoto::new(InputFile::file(image_path));
-                if first {
-                    let caption = messages::format_media_caption_html(
-                        post,
-                        app.config.links_base_url.as_deref(),
-                    );
-                    input_media_photo = input_media_photo
-                        .caption(&caption)
-                        .parse_mode(teloxide::types::ParseMode::Html);
-                    first = false;
-                }
-                media_group.push(InputMedia::Photo(input_media_photo))
-            }
-            None => {
-                error!("could not find downloaded image for gallery data item: {item:?}");
-            }
-        }
-    }
-
-    app.tg
-        .send_media_group(ChatId(chat_id), media_group)
-        .await?;
-    info!("gallery uploaded post_id={} chat_id={chat_id}", post.id);
-
-    Ok(())
-}
-
-async fn handle_new_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    info!("got new {post:#?}");
-    let mut post = Cow::Borrowed(post);
-
-    // Sometimes post_hint is not in top list response but exists when getting the link directly,
-    // but not always
-    // TODO: It appears that post with is_gallery=true will never have post_hint set
-    if post.post_hint.is_none() {
-        info!("post missing post_hint, getting like directly");
-        post = Cow::Owned(reddit::get_link(&app.http, &post.id).await.unwrap());
-    }
-
-    match post.post_type {
-        reddit::PostType::Image => handle_new_image_post(app, chat_id, &post).await,
-        reddit::PostType::Video => handle_new_video_post(app, chat_id, &post).await,
-        reddit::PostType::Link => handle_new_link_post(app, chat_id, &post).await,
-        reddit::PostType::SelfText => handle_new_self_post(app, chat_id, &post).await,
-        reddit::PostType::Gallery => handle_new_gallery_post(app, chat_id, &post).await,
-        // /r/bestof posts have no characteristics like post_hint that could be used to
-        // determine them as a type of Link; as a workaround, post Unknown post types the same way
-        // as a link
-        reddit::PostType::Unknown => {
-            warn!("unknown post type, post={post:?}");
-            handle_new_link_post(app, chat_id, &post).await
-        }
-    }
-}
-
 async fn check_post_newness(
     app: &AppState,
     chat_id: i64,
@@ -304,7 +141,7 @@ async fn check_post_newness(
 
     info!("marked post seen: {}", post.id);
 
-    if !only_mark_seen && let Err(e) = handle_new_post(app, chat_id, post).await {
+    if !only_mark_seen && let Err(e) = handlers::handle_new_post(app, chat_id, post).await {
         error!("failed to handle new post: {e}");
     }
 
