@@ -39,6 +39,7 @@ pub struct Database {
 impl Database {
     pub fn open(config: &Config) -> Result<Self> {
         let conn = Self::get_conn(&config.db_path).context("error connecting to database")?;
+        conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         Ok(Database { conn })
     }
@@ -78,7 +79,6 @@ impl Database {
         Ok(self.conn.changes() > 0)
     }
 
-    #[cfg(test)]
     pub fn is_post_seen(&self, chat_id: i64, post: &Post) -> Result<bool> {
         let mut stmt = self.conn.prepare(
             "

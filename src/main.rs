@@ -127,22 +127,31 @@ async fn check_post_newness(
         return Ok(());
     }
 
-    // Atomically mark post as seen and check if it was new in a single INSERT OR IGNORE.
-    // Mark seen before handling so a post that fails to send won't retry endlessly.
-    let is_new = app
-        .db()
-        .mark_post_seen_if_new(chat_id, post)
-        .context("failed to mark post seen")?;
-
-    if !is_new {
+    if app.db().is_post_seen(chat_id, post)? {
         debug!("post already seen, skipping...");
         return Ok(());
     }
 
-    info!("marked post seen: {}", post.id);
+    if only_mark_seen {
+        app.db()
+            .mark_post_seen_if_new(chat_id, post)
+            .context("failed to mark post seen")?;
+        info!("marked post seen (initial): {}", post.id);
+        return Ok(());
+    }
 
-    if !only_mark_seen && let Err(e) = handlers::handle_new_post(app, chat_id, post).await {
-        error!("failed to handle new post: {e}");
+    // Send first, then mark as seen. If send fails, the post will be retried
+    // on the next poll cycle instead of being silently dropped.
+    match handlers::handle_new_post(app, chat_id, post).await {
+        Ok(()) => {
+            app.db()
+                .mark_post_seen_if_new(chat_id, post)
+                .context("failed to mark post seen")?;
+            info!("sent and marked post seen: {}", post.id);
+        }
+        Err(e) => {
+            error!("failed to handle new post (will retry next cycle): {e}");
+        }
     }
 
     Ok(())
