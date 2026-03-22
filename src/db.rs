@@ -212,7 +212,7 @@ impl Database {
         Ok(subreddit)
     }
 
-    pub fn subscribe(&self, chat_id: i64, args: &SubscriptionArgs) -> Result<()> {
+    pub fn subscribe(&self, chat_id: i64, args: &SubscriptionArgs) -> Result<i64> {
         let mut stmt = self.conn.prepare(
             "
             insert into subscription (chat_id, subreddit, post_limit, time, filter, created_at)
@@ -228,7 +228,7 @@ impl Database {
             ":created_at": chrono::Utc::now()
         })
         .context("could not add subscription")?;
-        Ok(())
+        Ok(self.conn.last_insert_rowid())
     }
 
     pub fn unsubscribe(&self, chat_id: i64, subreddit: &str) -> Result<String> {

@@ -125,13 +125,29 @@ async fn handle_sub(
     match subreddit_about {
         Ok(data) => {
             args.subreddit = data.display_name;
-            app.db().subscribe(chat_id, &args)?;
+            let sub_id = app.db().subscribe(chat_id, &args)?;
             info!("subscribed in chat id {chat_id} with {args:#?};");
-            tg.send_message(
-                ChatId(chat_id),
-                format!("Subscribed to r/{}", args.subreddit),
-            )
-            .await?;
+
+            let wizard_mode = args.limit.is_none() && args.time.is_none() && args.filter.is_none();
+            if wizard_mode {
+                let sub = app
+                    .db()
+                    .get_subscription_by_id(sub_id)?
+                    .context("subscription just created not found")?;
+                let keyboard = build_subscription_edit_keyboard(&sub);
+                tg.send_message(
+                    ChatId(chat_id),
+                    format!("Subscribed to r/{}", args.subreddit),
+                )
+                .reply_markup(keyboard)
+                .await?;
+            } else {
+                tg.send_message(
+                    ChatId(chat_id),
+                    format!("Subscribed to r/{}", args.subreddit),
+                )
+                .await?;
+            }
         }
         Err(reddit::SubredditAboutError::NoSuchSubreddit) => {
             tg.send_message(ChatId(chat_id), "No such subreddit")
