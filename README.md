@@ -87,7 +87,15 @@ Remove a subscription from the current conversation.
 
 ### `/listsubs`
 
-List all subscriptions for the current conversation.
+List all subscriptions for the current conversation as an interactive inline
+keyboard. Tapping a subscription opens an edit menu where you can:
+
+- **Cycle limit** — tap to cycle through 1, 3, 5, 10, 25
+- **Cycle time period** — tap to cycle through hour, day, week, month, year, all
+- **Cycle filter** — tap to cycle through all, image, video, link, self_text, gallery
+- **Pause / Resume** — pause a subscription so it stops checking for new posts
+  without losing its settings
+- **Unsubscribe** — remove the subscription
 
 ### `/get <subreddit> [time=<time>] [limit=<limit>] [filter=<filter>]`
 
