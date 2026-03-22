@@ -11,9 +11,12 @@ use url::Url;
 
 /// Downloads url to a file and returns the path along with handle to temp dir in which the file is.
 /// Whe the temp dir value is dropped, the contents in file system are deleted.
-pub async fn download_url_to_tmp(url: &str) -> Result<(PathBuf, TempDir)> {
+pub async fn download_url_to_tmp(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<(PathBuf, TempDir)> {
     info!("downloading {url}");
-    let mut res = reqwest::get(url).await?;
+    let mut res = client.get(url).send().await?;
     let tmp_dir = TempDir::with_prefix("tgreddit")?;
     let parsed_url = Url::parse(url)?;
     let tmp_filename = Path::new(parsed_url.path())

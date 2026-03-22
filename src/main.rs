@@ -144,7 +144,7 @@ async fn handle_new_video_post(app: &AppState, chat_id: i64, post: &reddit::Post
 }
 
 async fn handle_new_image_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    match download_url_to_tmp(&post.url).await {
+    match download_url_to_tmp(&app.http, &post.url).await {
         Ok((path, _tmp_dir)) => {
             // path will be deleted when _tmp_dir when goes out of scope
             let caption =
@@ -193,7 +193,10 @@ async fn handle_new_self_post(app: &AppState, chat_id: i64, post: &reddit::Post)
     Ok(())
 }
 
-async fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBuf, TempDir)>> {
+async fn download_gallery(
+    client: &reqwest::Client,
+    post: &reddit::Post,
+) -> Result<HashMap<String, (PathBuf, TempDir)>> {
     let media_metadata_map = post
         .media_metadata
         .as_ref()
@@ -204,7 +207,7 @@ async fn download_gallery(post: &reddit::Post) -> Result<HashMap<String, (PathBu
         let s = &media_metadata.s;
         let url = &s.url.replace("&amp;", "&");
         info!("got media id={id} x={} y={} url={}", &s.x, &s.y, url);
-        map.insert(id.to_string(), download_url_to_tmp(url).await?);
+        map.insert(id.to_string(), download_url_to_tmp(client, url).await?);
     }
 
     Ok(map)
@@ -218,7 +221,7 @@ async fn handle_new_gallery_post(app: &AppState, chat_id: i64, post: &reddit::Po
         .as_ref()
         .expect("expected media_metadata to exist in gallery post")
         .items;
-    let gallery_files_map = download_gallery(post).await?;
+    let gallery_files_map = download_gallery(&app.http, post).await?;
     let mut media_group = vec![];
     let mut first = true;
 
