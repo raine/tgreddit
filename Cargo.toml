@@ -28,7 +28,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 toml = "1"
 url = "2"
-xdg = "2"
+xdg = "3"
 
 # Use vendored openssl. We don't depend on it directly.
 openssl = { version = "0.10", features = ["vendored"], optional = true }

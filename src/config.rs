@@ -39,7 +39,7 @@ pub fn read_config() -> Config {
 }
 
 fn default_db_path() -> PathBuf {
-    let xdg_dirs = xdg::BaseDirectories::with_prefix(PKG_NAME).unwrap();
+    let xdg_dirs = xdg::BaseDirectories::with_prefix(PKG_NAME);
     xdg_dirs.place_state_file("data.db3").unwrap()
 }
 
