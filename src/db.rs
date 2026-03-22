@@ -205,13 +205,13 @@ impl Database {
 }
 
 impl ToSql for TopPostsTimePeriod {
-    fn to_sql(&self) -> Result<rusqlite::types::ToSqlOutput, rusqlite::Error> {
+    fn to_sql(&self) -> Result<rusqlite::types::ToSqlOutput<'_>, rusqlite::Error> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
 
 impl ToSql for PostType {
-    fn to_sql(&self) -> Result<rusqlite::types::ToSqlOutput, rusqlite::Error> {
+    fn to_sql(&self) -> Result<rusqlite::types::ToSqlOutput<'_>, rusqlite::Error> {
         Ok(ToSqlOutput::Owned(Value::Text(self.to_string())))
     }
 }
