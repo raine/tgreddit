@@ -21,6 +21,13 @@ fi
 echo "Running checks..."
 just check
 
+# Checks may have reformatted files (cargo fmt, clippy --fix)
+if ! git diff --quiet; then
+	echo "error: 'just check' caused uncommitted changes — commit them first" >&2
+	git diff --stat
+	exit 1
+fi
+
 # Read current version
 current=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
 IFS='.' read -r major minor patch_v <<< "$current"
