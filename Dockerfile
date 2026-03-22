@@ -1,5 +1,5 @@
 # Step 1: Compute a recipe file
-FROM rust:1.70.0-slim-bookworm as chef
+FROM rust:1.86.0-slim-bookworm as chef
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
   cargo install cargo-chef
 
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
   cargo chef cook --release --target aarch64-unknown-linux-gnu --recipe-path recipe.json --features vendored-openssl
 
 # Step 4: Build the binary
-FROM rust:1.70.0-slim-bookworm as builder
+FROM rust:1.86.0-slim-bookworm as builder
 WORKDIR /app
 RUN rustup target add aarch64-unknown-linux-gnu
 COPY Cargo.toml Cargo.lock ./
@@ -39,6 +39,6 @@ COPY --from=builder /app/target/aarch64-unknown-linux-gnu/release/tgreddit .
 RUN apt-get update && apt-get install -y \
   curl python3 ffmpeg \
   && rm -rf /var/lib/apt/lists/*
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2024.04.09/yt-dlp -o /usr/local/bin/yt-dlp
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/download/2026.03.17/yt-dlp -o /usr/local/bin/yt-dlp
 RUN chmod a+rx /usr/local/bin/yt-dlp
 ENTRYPOINT ["./tgreddit"]
