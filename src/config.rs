@@ -1,7 +1,7 @@
-use log::error;
 use secrecy::SecretString;
 use serde::Deserialize;
 use std::{env, path::PathBuf};
+use tracing::error;
 
 use crate::{
     PKG_NAME,

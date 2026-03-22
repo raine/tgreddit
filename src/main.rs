@@ -1,6 +1,5 @@
 use crate::{download::*, state::AppState, types::*};
 use anyhow::{Context, Result};
-use log::*;
 use reddit::{PostType, TopPostsTimePeriod};
 use secrecy::ExposeSecret;
 use signal_hook::{
@@ -27,6 +26,7 @@ use teloxide::{
 use teloxide::{prelude::*, types::InputMedia};
 use tempfile::TempDir;
 use tokio::sync::broadcast;
+use tracing::*;
 
 mod args;
 mod bot;
@@ -43,7 +43,9 @@ const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
     let config = Arc::new(config::read_config());
     info!("starting with config: {config:#?}");
 

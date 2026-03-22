@@ -1,6 +1,5 @@
 use anyhow::Result;
 use duct::cmd;
-use log::{error, info};
 use std::{
     ffi::OsString,
     fs,
@@ -8,6 +7,7 @@ use std::{
     path::Path,
     sync::LazyLock,
 };
+use tracing::{error, info};
 
 use crate::types::*;
 

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use log::*;
+use tracing::*;
 
 use std::io::Write;
 use std::{

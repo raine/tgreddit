@@ -1,7 +1,7 @@
 use super::*;
 use anyhow::{Context, Result};
-use log::{error, info};
 use thiserror::Error;
+use tracing::{error, info};
 use url::Url;
 
 static REDDIT_BASE_URL: &str = "https://www.reddit.com";

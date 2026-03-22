@@ -1,6 +1,6 @@
 use getopts::Options;
-use log::*;
 use std::env;
+use tracing::*;
 
 pub fn parse_args() -> getopts::Matches {
     let args: Vec<String> = env::args().collect();
