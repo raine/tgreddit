@@ -14,7 +14,7 @@ getopts = "0.2"
 itertools = "0.14"
 log = "0.4"
 regex = { version = "1", default-features = false, features = ["std", "unicode-perl"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json", "query"] }
 rusqlite = { version = "0.39", features = ["chrono", "bundled"] }
 rusqlite_migration = "2"
 secrecy = { version = "0.10", features = ["serde"] }
