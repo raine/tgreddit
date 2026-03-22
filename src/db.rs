@@ -58,10 +58,12 @@ impl Database {
         Migrations::new(migrations).to_latest(&mut self.conn)
     }
 
-    pub fn mark_post_seen(&self, chat_id: i64, post: &Post) -> Result<()> {
+    /// Atomically marks a post as seen if it hasn't been seen before.
+    /// Returns true if the post was new (inserted), false if already seen.
+    pub fn mark_post_seen_if_new(&self, chat_id: i64, post: &Post) -> Result<bool> {
         let mut stmt = self.conn.prepare(
             "
-            insert into post (post_id, chat_id, subreddit, seen_at)
+            insert or ignore into post (post_id, chat_id, subreddit, seen_at)
             values (:post_id, :chat_id, :subreddit, :seen_at)
             ",
         )?;
@@ -71,15 +73,17 @@ impl Database {
             ":subreddit": &post.subreddit,
             ":seen_at": chrono::Utc::now()
         })
-        .context("could not mark post seen")
-        .map(|_| ())
+        .context("could not mark post seen")?;
+
+        Ok(self.conn.changes() > 0)
     }
 
+    #[cfg(test)]
     pub fn is_post_seen(&self, chat_id: i64, post: &Post) -> Result<bool> {
         let mut stmt = self.conn.prepare(
             "
             select exists(
-                select 1 
+                select 1
                   from post
                  where post_id = :post_id and chat_id = :chat_id
             );
@@ -267,9 +271,11 @@ mod tests {
         };
 
         assert!(!db.existing_posts_for_subreddit(1, "absoluteunit").unwrap());
-        db.mark_post_seen(1, &post).unwrap();
+        assert!(db.mark_post_seen_if_new(1, &post).unwrap());
         assert!(db.is_post_seen(1, &post).unwrap());
         assert!(db.existing_posts_for_subreddit(1, "absoluteunit").unwrap());
+        // Second insert is idempotent
+        assert!(!db.mark_post_seen_if_new(1, &post).unwrap());
     }
 
     #[test]
@@ -341,7 +347,7 @@ mod tests {
             url: "https://i.imgur.com/Zt6f5mB.gifv".into(),
             post_type: PostType::Video,
         };
-        db.mark_post_seen(1, &post).unwrap();
+        db.mark_post_seen_if_new(1, &post).unwrap();
         assert!(db.is_post_seen(1, &post).unwrap());
         db.unsubscribe(1, "test").unwrap();
         assert!(!db.is_post_seen(1, &post).unwrap());

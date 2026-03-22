@@ -298,25 +298,23 @@ async fn check_post_newness(
         return Ok(());
     }
 
-    if app
+    // Atomically mark post as seen and check if it was new in a single INSERT OR IGNORE.
+    // Mark seen before handling so a post that fails to send won't retry endlessly.
+    let is_new = app
         .db()
-        .is_post_seen(chat_id, post)
-        .expect("failed to query if post is seen")
-    {
+        .mark_post_seen_if_new(chat_id, post)
+        .context("failed to mark post seen")?;
+
+    if !is_new {
         debug!("post already seen, skipping...");
         return Ok(());
     }
 
-    if !only_mark_seen {
-        // Intentionally marking post as seen if handling it fails. It's preferable to not have it
-        // fail continuously.
-        if let Err(e) = handle_new_post(app, chat_id, post).await {
-            error!("failed to handle new post: {e}");
-        }
-    }
-
-    app.db().mark_post_seen(chat_id, post)?;
     info!("marked post seen: {}", post.id);
+
+    if !only_mark_seen && let Err(e) = handle_new_post(app, chat_id, post).await {
+        error!("failed to handle new post: {e}");
+    }
 
     Ok(())
 }
