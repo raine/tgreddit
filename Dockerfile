@@ -2,7 +2,7 @@
 # Cross-compilation is used for arm64 targets instead.
 
 FROM --platform=linux/amd64 rust:1.90.0-slim-bookworm as chef
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=cache,id=cargo-registry-chef,target=/usr/local/cargo/registry \
   cargo install cargo-chef --locked
 
 FROM --platform=linux/amd64 chef as planner
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
   gcc gcc-aarch64-linux-gnu musl-tools libssl-dev perl cmake make \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=planner /app/recipe.json recipe.json
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=cache,id=cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry \
   if [ "$TARGETARCH" = "arm64" ]; then \
     cargo chef cook --release --target aarch64-unknown-linux-gnu --recipe-path recipe.json --features vendored-openssl; \
   else \
@@ -34,7 +34,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY --from=cacher /app/target target
 COPY --from=cacher $CARGO_HOME $CARGO_HOME
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=cache,id=cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry \
   if [ "$TARGETARCH" = "arm64" ]; then \
     cargo build --release --target aarch64-unknown-linux-gnu --features vendored-openssl && \
     cp target/aarch64-unknown-linux-gnu/release/tgreddit /app/tgreddit-bin; \
