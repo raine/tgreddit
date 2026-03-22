@@ -1,6 +1,6 @@
 use crate::state::AppState;
 use crate::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use regex::Regex;
 use std::sync::{Arc, LazyLock};
 use teloxide::{
@@ -79,98 +79,124 @@ pub async fn handle_command(
     command: Command,
     app: Arc<AppState>,
 ) -> Result<()> {
-    async fn handle(message: &Message, tg: &Bot, command: Command, app: &AppState) -> Result<()> {
-        match command {
-            Command::Help => {
-                tg.send_message(message.chat.id, Command::descriptions().to_string())
-                    .await?;
-            }
-            Command::Sub(mut args) => {
-                let chat_id = message.chat.id.0;
-                let subreddit_about = reddit::get_subreddit_about(&args.subreddit).await;
-                match subreddit_about {
-                    Ok(data) => {
-                        args.subreddit = data.display_name;
-                        app.db().subscribe(chat_id, &args)?;
-                        info!("subscribed in chat id {chat_id} with {args:#?};");
-                        tg.send_message(
-                            ChatId(chat_id),
-                            format!("Subscribed to r/{}", args.subreddit),
-                        )
-                        .await?;
-                    }
-                    Err(reddit::SubredditAboutError::NoSuchSubreddit) => {
-                        tg.send_message(ChatId(chat_id), "No such subreddit")
-                            .await?;
-                    }
-                    Err(err) => {
-                        Err(err)?;
-                    }
-                }
-            }
-            Command::Unsub(subreddit) => {
-                let chat_id = message.chat.id.0;
-                let subreddit = subreddit.replace("r/", "");
-                let reply = match app.db().unsubscribe(chat_id, &subreddit) {
-                    Ok(sub) => format!("Unsubscribed from r/{sub}"),
-                    Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
-                };
-                tg.send_message(ChatId(chat_id), reply).await?;
-            }
-            Command::ListSubs => {
-                let subs = app.db().get_subscriptions_for_chat(message.chat.id.0)?;
-                let reply = messages::format_subscription_list(&subs);
-                tg.send_message(message.chat.id, reply).await?;
-            }
-            Command::Get(args) => {
-                let subreddit = &args.subreddit;
-                let limit = args
-                    .limit
-                    .or(app.config.default_limit)
-                    .unwrap_or(config::DEFAULT_LIMIT);
-                let time = args
-                    .time
-                    .or(app.config.default_time)
-                    .unwrap_or(config::DEFAULT_TIME_PERIOD);
-                let filter = args.filter.or(app.config.default_filter);
-                let chat_id = message.chat.id.0;
+    let result = match command {
+        Command::Help => handle_help(&message, &tg).await,
+        Command::Sub(args) => handle_sub(&message, &tg, &app, args).await,
+        Command::Unsub(subreddit) => handle_unsub(&message, &tg, &app, subreddit).await,
+        Command::ListSubs => handle_list_subs(&message, &tg, &app).await,
+        Command::Get(args) => handle_get(&message, &tg, &app, args).await,
+    };
 
-                let posts = reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time)
-                    .await
-                    .context("failed to get posts")?
-                    .into_iter()
-                    .filter(|p| {
-                        if filter.is_some() {
-                            filter.as_ref() == Some(&p.post_type)
-                        } else {
-                            true
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
-
-                if !posts.is_empty() {
-                    for post in posts {
-                        if let Err(e) = handlers::handle_new_post(app, chat_id, &post).await {
-                            error!("failed to handle new post: {e}");
-                        }
-                    }
-                } else {
-                    tg.send_message(message.chat.id, "No posts found").await?;
-                }
-            }
-        };
-
-        Ok(())
-    }
-
-    if let Err(err) = handle(&message, &tg, command, &app).await {
+    if let Err(err) = result {
         error!("failed to handle message: {}", err);
         tg.send_message(message.chat.id, "Something went wrong")
             .await?;
     }
 
+    Ok(())
+}
+
+async fn handle_help(message: &Message, tg: &Bot) -> Result<()> {
+    tg.send_message(message.chat.id, Command::descriptions().to_string())
+        .await?;
+    Ok(())
+}
+
+async fn handle_sub(
+    message: &Message,
+    tg: &Bot,
+    app: &AppState,
+    mut args: SubscriptionArgs,
+) -> Result<()> {
+    let chat_id = message.chat.id.0;
+    let subreddit_about = reddit::get_subreddit_about(&args.subreddit).await;
+    match subreddit_about {
+        Ok(data) => {
+            args.subreddit = data.display_name;
+            app.db().subscribe(chat_id, &args)?;
+            info!("subscribed in chat id {chat_id} with {args:#?};");
+            tg.send_message(
+                ChatId(chat_id),
+                format!("Subscribed to r/{}", args.subreddit),
+            )
+            .await?;
+        }
+        Err(reddit::SubredditAboutError::NoSuchSubreddit) => {
+            tg.send_message(ChatId(chat_id), "No such subreddit")
+                .await?;
+        }
+        Err(err) => {
+            Err(err)?;
+        }
+    }
+    Ok(())
+}
+
+async fn handle_unsub(
+    message: &Message,
+    tg: &Bot,
+    app: &AppState,
+    subreddit: String,
+) -> Result<()> {
+    let chat_id = message.chat.id.0;
+    let subreddit = subreddit.replace("r/", "");
+    let reply = match app.db().unsubscribe(chat_id, &subreddit) {
+        Ok(sub) => format!("Unsubscribed from r/{sub}"),
+        Err(_) => format!("Error: Not subscribed to r/{subreddit}"),
+    };
+    tg.send_message(ChatId(chat_id), reply).await?;
+    Ok(())
+}
+
+async fn handle_list_subs(message: &Message, tg: &Bot, app: &AppState) -> Result<()> {
+    let subs = app.db().get_subscriptions_for_chat(message.chat.id.0)?;
+    let reply = messages::format_subscription_list(&subs);
+    tg.send_message(message.chat.id, reply).await?;
+    Ok(())
+}
+
+async fn handle_get(
+    message: &Message,
+    tg: &Bot,
+    app: &AppState,
+    args: SubscriptionArgs,
+) -> Result<()> {
+    let subreddit = &args.subreddit;
+    let limit = args
+        .limit
+        .or(app.config.default_limit)
+        .unwrap_or(config::DEFAULT_LIMIT);
+    let time = args
+        .time
+        .or(app.config.default_time)
+        .unwrap_or(config::DEFAULT_TIME_PERIOD);
+    let filter = args.filter.or(app.config.default_filter);
+    let chat_id = message.chat.id.0;
+
+    let posts = reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time)
+        .await
+        .context("failed to get posts")?
+        .into_iter()
+        .filter(|p| {
+            if filter.is_some() {
+                filter.as_ref() == Some(&p.post_type)
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<_>>();
+
+    debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
+
+    if !posts.is_empty() {
+        for post in posts {
+            if let Err(e) = handlers::handle_new_post(app, chat_id, &post).await {
+                error!("failed to handle new post: {e}");
+            }
+        }
+    } else {
+        tg.send_message(message.chat.id, "No posts found").await?;
+    }
     Ok(())
 }
 
