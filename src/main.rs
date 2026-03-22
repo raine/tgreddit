@@ -20,7 +20,7 @@ use std::{
 use teloxide::types::InputFile;
 use teloxide::{
     payloads::{SendMessageSetters, SendPhotoSetters, SendVideoSetters},
-    types::InputMediaPhoto,
+    types::{InputMediaPhoto, LinkPreviewOptions},
 };
 use teloxide::{prelude::*, types::InputMedia};
 use tempfile::TempDir;
@@ -168,7 +168,6 @@ async fn handle_new_link_post(
     let message_html = messages::format_link_message_html(post, config.links_base_url.as_deref());
     tg.send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
-        .disable_web_page_preview(false)
         .await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
@@ -183,7 +182,13 @@ async fn handle_new_self_post(
     let message_html = messages::format_media_caption_html(post, config.links_base_url.as_deref());
     tg.send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
-        .disable_web_page_preview(true)
+        .link_preview_options(LinkPreviewOptions {
+            is_disabled: true,
+            url: None,
+            prefer_small_media: false,
+            prefer_large_media: false,
+            show_above_text: false,
+        })
         .await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())

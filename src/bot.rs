@@ -41,7 +41,8 @@ impl MyBot {
 
         let handler = Update::filter_message().branch(
             dptree::filter(|msg: Message, config: Arc<config::Config>| {
-                msg.from()
+                msg.from
+                    .as_ref()
                     .map(|user| config.authorized_user_ids.contains(&user.id.0))
                     .unwrap_or_default()
             })
