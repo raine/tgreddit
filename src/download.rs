@@ -9,28 +9,38 @@ use std::{
 use tempfile::TempDir;
 use url::Url;
 
-/// Downloads url to a file and returns the path along with handle to temp dir in which the file is.
-/// Whe the temp dir value is dropped, the contents in file system are deleted.
+/// Downloads url to a new temp directory. Returns the file path and the TempDir handle.
+/// When the TempDir is dropped, the contents are deleted.
 pub async fn download_url_to_tmp(
     client: &reqwest::Client,
     url: &str,
 ) -> Result<(PathBuf, TempDir)> {
+    let tmp_dir = TempDir::with_prefix("tgreddit")?;
+    let path = download_url_to_dir(client, url, tmp_dir.path()).await?;
+    Ok((path, tmp_dir))
+}
+
+/// Downloads url to the given directory. Returns the file path.
+pub async fn download_url_to_dir(
+    client: &reqwest::Client,
+    url: &str,
+    dir: &Path,
+) -> Result<PathBuf> {
     info!("downloading {url}");
     let mut res = client.get(url).send().await?;
-    let tmp_dir = TempDir::with_prefix("tgreddit")?;
     let parsed_url = Url::parse(url)?;
     let tmp_filename = Path::new(parsed_url.path())
         .file_name()
         .context("could not get basename from url")?;
-    let tmp_path = tmp_dir.path().join(tmp_filename);
-    let mut file = File::create(&tmp_path)
-        .map_err(|_| anyhow::anyhow!("failed to create file {:?}", tmp_path))?;
+    let file_path = dir.join(tmp_filename);
+    let mut file = File::create(&file_path)
+        .map_err(|_| anyhow::anyhow!("failed to create file {:?}", file_path))?;
 
     while let Some(bytes) = res.chunk().await? {
         file.write(&bytes)
-            .map_err(|_| anyhow::anyhow!("error writing to file {:?}", tmp_path))?;
+            .map_err(|_| anyhow::anyhow!("error writing to file {:?}", file_path))?;
     }
 
-    info!("downloaded {url} to {}", tmp_path.to_string_lossy());
-    Ok((tmp_path, tmp_dir))
+    info!("downloaded {url} to {}", file_path.to_string_lossy());
+    Ok(file_path)
 }

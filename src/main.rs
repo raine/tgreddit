@@ -193,44 +193,35 @@ async fn handle_new_self_post(app: &AppState, chat_id: i64, post: &reddit::Post)
     Ok(())
 }
 
-async fn download_gallery(
-    client: &reqwest::Client,
-    post: &reddit::Post,
-) -> Result<HashMap<String, (PathBuf, TempDir)>> {
+async fn handle_new_gallery_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    let gallery_data_items = &post
+        .gallery_data
+        .as_ref()
+        .expect("expected gallery_data to exist in gallery post")
+        .items;
     let media_metadata_map = post
         .media_metadata
         .as_ref()
         .expect("expected media_metadata to exist in gallery post");
 
-    let mut map: HashMap<String, (PathBuf, TempDir)> = HashMap::new();
+    // Download all gallery images into a single temp directory
+    let tmp_dir = TempDir::with_prefix("tgreddit-gallery")?;
+    let mut downloaded: HashMap<String, PathBuf> = HashMap::new();
     for (id, media_metadata) in media_metadata_map {
         let s = &media_metadata.s;
         let url = &s.url.replace("&amp;", "&");
         info!("got media id={id} x={} y={} url={}", &s.x, &s.y, url);
-        map.insert(id.to_string(), download_url_to_tmp(client, url).await?);
+        let path = download::download_url_to_dir(&app.http, url, tmp_dir.path()).await?;
+        downloaded.insert(id.to_string(), path);
     }
 
-    Ok(map)
-}
-
-async fn handle_new_gallery_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
-    // post.gallery_data is an array that describes the order of photos in the gallery, while
-    // post.media_metadata is a map that contains the URL for each photo
-    let gallery_data_items = &post
-        .gallery_data
-        .as_ref()
-        .expect("expected media_metadata to exist in gallery post")
-        .items;
-    let gallery_files_map = download_gallery(&app.http, post).await?;
+    // Build media group in gallery_data order (which defines display order)
     let mut media_group = vec![];
     let mut first = true;
-
     for item in gallery_data_items {
-        let file = gallery_files_map.get(&item.media_id);
-        match file {
-            Some((image_path, _tempdir)) => {
+        match downloaded.get(&item.media_id) {
+            Some(image_path) => {
                 let mut input_media_photo = InputMediaPhoto::new(InputFile::file(image_path));
-                // The first InputMediaPhoto in the vector needs to contain the caption and parse_mode;
                 if first {
                     let caption = messages::format_media_caption_html(
                         post,
@@ -241,7 +232,6 @@ async fn handle_new_gallery_post(app: &AppState, chat_id: i64, post: &reddit::Po
                         .parse_mode(teloxide::types::ParseMode::Html);
                     first = false;
                 }
-
                 media_group.push(InputMedia::Photo(input_media_photo))
             }
             None => {
