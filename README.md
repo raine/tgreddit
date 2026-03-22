@@ -16,8 +16,26 @@ dependencies.
 
 ## install
 
+### prebuilt binary
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/raine/tgreddit/master/scripts/install.sh | bash
+```
+
+Or download directly from
+[GitHub releases](https://github.com/raine/tgreddit/releases/latest):
+
+| Platform              | Download                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Linux (x64)           | [tgreddit-linux-x64.tar.gz](https://github.com/raine/tgreddit/releases/latest/download/tgreddit-linux-x64.tar.gz)       |
+| Linux (ARM64)         | [tgreddit-linux-arm64.tar.gz](https://github.com/raine/tgreddit/releases/latest/download/tgreddit-linux-arm64.tar.gz)   |
+| macOS (Apple Silicon) | [tgreddit-darwin-arm64.tar.gz](https://github.com/raine/tgreddit/releases/latest/download/tgreddit-darwin-arm64.tar.gz) |
+| macOS (Intel)         | [tgreddit-darwin-x64.tar.gz](https://github.com/raine/tgreddit/releases/latest/download/tgreddit-darwin-x64.tar.gz)     |
+
+### cargo
+
 ```sh
-$ cargo install tgreddit
+cargo install tgreddit
 ```
 
 ### requirements
@@ -147,16 +165,78 @@ There's a prebuilt Docker image with dependencies included at
 Of course, you may also build your own using from the
 [Dockerfile](https://raw.githubusercontent.com/raine/tgreddit/master/Dockerfile).
 
-## cross compiling for Raspberry Pi
+## systemd service
 
-You can cross-compile tgreddit for Raspberry Pi using a Docker container. The
-resulting executable will be statically linked and should work across different
-Linux distributions on the Raspberry Pi.
+Example setup for running tgreddit as a systemd service on a Linux server or
+Raspberry Pi.
 
-```sh
-docker run --rm -it \
-	-v "$(pwd)":/home/rust/src messense/rust-musl-cross:aarch64-musl \
-	cargo build --release --target aarch64-unknown-linux-gnu --features vendored-openssl
+1. Install tgreddit, its runtime dependencies, and create a dedicated user:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/raine/tgreddit/master/scripts/install.sh | bash
+sudo apt install -y ffmpeg python3
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+sudo chmod a+rx /usr/local/bin/yt-dlp
+sudo useradd -r -s /usr/sbin/nologin tgreddit
+sudo mkdir -p /opt/tgreddit /var/lib/tgreddit
+sudo chown tgreddit:tgreddit /var/lib/tgreddit
+```
+
+2. Copy the binary and create a config file:
+
+```bash
+sudo cp "$(which tgreddit)" /opt/tgreddit/tgreddit
+sudo cp config.example.toml /opt/tgreddit/config.toml
+# Edit /opt/tgreddit/config.toml with your settings
+```
+
+3. Create the service file at `/etc/systemd/system/tgreddit.service`:
+
+```ini
+[Unit]
+Description=tgreddit
+Documentation=https://github.com/raine/tgreddit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tgreddit
+Group=tgreddit
+WorkingDirectory=/opt/tgreddit
+Environment=CONFIG_PATH=/opt/tgreddit/config.toml
+Environment=RUST_LOG=info
+ExecStart=/opt/tgreddit/tgreddit
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/tgreddit
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+DevicePolicy=closed
+RestrictRealtime=yes
+LockPersonality=yes
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tgreddit
+
+[Install]
+WantedBy=multi-user.target
+```
+
+4. Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now tgreddit
+sudo journalctl -u tgreddit -f   # follow logs
 ```
 
 ## have an idea, question or a bug report?
