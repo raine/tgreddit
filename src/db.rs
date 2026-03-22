@@ -256,20 +256,14 @@ mod tests {
         db.migrate().unwrap();
         let post = Post {
             id: "v6nu75".into(),
-            created: 1654581100.0,
             post_hint: Some("link".into()),
             subreddit: "absoluteunit".into(),
             title: "Tipping a cow to trim its hooves".into(),
-            is_self: false,
-            is_video: false,
-            is_gallery: Some(false),
             gallery_data: None,
             media_metadata: None,
-            ups: 469,
             permalink: "/r/absoluteunit/comments/v6nu75/tipping_a_cow_to_trim_its_hooves/".into(),
             url: "https://i.imgur.com/Zt6f5mB.gifv".into(),
             post_type: PostType::Video,
-            crosspost_parent_list: None,
         };
 
         assert!(!db.existing_posts_for_subreddit(1, "absoluteunit").unwrap());
@@ -338,20 +332,14 @@ mod tests {
         db.subscribe(1, &subscription_args).unwrap();
         let post = Post {
             id: "v6nu75".into(),
-            created: 1654581100.0,
             post_hint: Some("link".into()),
             subreddit: "test".into(),
             title: "Tipping a cow to trim its hooves".into(),
-            is_self: false,
-            is_gallery: Some(false),
-            is_video: false,
             gallery_data: None,
             media_metadata: None,
-            ups: 469,
             permalink: "/r/test/comments/v6nu75/tipping_a_cow_to_trim_its_hooves/".into(),
             url: "https://i.imgur.com/Zt6f5mB.gifv".into(),
             post_type: PostType::Video,
-            crosspost_parent_list: None,
         };
         db.mark_post_seen(1, &post).unwrap();
         assert!(db.is_post_seen(1, &post).unwrap());

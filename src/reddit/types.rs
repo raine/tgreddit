@@ -47,9 +47,7 @@ pub struct ListingItem {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct GalleryDataItem {
-    pub caption: Option<String>,
     pub media_id: String,
-    pub id: u32,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -67,28 +65,18 @@ pub struct Media {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct MediaMetadata {
-    pub status: String,
-    pub e: String,
-    #[serde(rename = "m")]
-    pub mime: String,
     pub s: Media,
 }
 
 #[derive(Debug, Clone)]
 pub struct Post {
     pub id: String,
-    pub created: f32,
     pub subreddit: String,
     pub title: String,
-    pub is_video: bool,
-    pub ups: u32,
     pub permalink: String,
     pub url: String,
     pub post_hint: Option<String>,
-    pub is_self: bool,
-    pub is_gallery: Option<bool>,
     pub post_type: PostType,
-    pub crosspost_parent_list: Option<Vec<Post>>,
     pub gallery_data: Option<GalleryData>,
     pub media_metadata: Option<HashMap<String, MediaMetadata>>,
 }
@@ -101,11 +89,9 @@ impl<'de> Deserialize<'de> for Post {
         #[derive(Deserialize)]
         pub struct PostHelper {
             pub id: String,
-            pub created: f32,
             pub subreddit: String,
             pub title: String,
             pub is_video: bool,
-            pub ups: u32,
             pub permalink: String,
             pub url: String,
             pub post_hint: Option<String>,
@@ -162,17 +148,11 @@ impl<'de> Deserialize<'de> for Post {
 
         Ok(Post {
             id: helper.id,
-            created: helper.created,
             subreddit: helper.subreddit,
             title: helper.title,
-            is_video: helper.is_video,
-            ups: helper.ups,
             permalink: helper.permalink,
             url: helper.url,
             post_hint: helper.post_hint,
-            is_self: helper.is_self,
-            crosspost_parent_list: helper.crosspost_parent_list,
-            is_gallery: helper.is_gallery,
             post_type,
             gallery_data: helper.gallery_data,
             media_metadata: helper.media_metadata,
@@ -198,5 +178,4 @@ pub struct SubredditAboutResponse {
 #[derive(Deserialize, Debug)]
 pub struct SubredditAbout {
     pub display_name: String,
-    pub display_name_prefixed: String,
 }
