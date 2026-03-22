@@ -50,7 +50,12 @@ pub async fn get_subreddit_top_posts(
         .await?
         .json::<ListingResponse>()
         .await?;
-    let posts = res.data.children.into_iter().map(|e| e.data).collect();
+    let posts = res
+        .data
+        .children
+        .into_iter()
+        .map(|e| Post::from(e.data))
+        .collect();
     Ok(posts)
 }
 
@@ -78,7 +83,7 @@ pub async fn get_link(client: &reqwest::Client, link_id: &str) -> Result<Post> {
             .data
             .children
             .into_iter()
-            .map(|e| e.data)
+            .map(|e| Post::from(e.data))
             .next()
             .context("no post in response")
             .map_err(|e| {
