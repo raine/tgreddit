@@ -37,6 +37,7 @@ pub async fn download(url: &str) -> Result<(Video, TempDir)> {
         .args(&ytdlp_args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .context("failed to run yt-dlp")?;
 
