@@ -4,8 +4,8 @@ use serde::Deserialize;
 use std::{env, path::PathBuf};
 
 use crate::{
-    reddit::{PostType, TopPostsTimePeriod},
     PKG_NAME,
+    reddit::{PostType, TopPostsTimePeriod},
 };
 
 const CONFIG_PATH_ENV: &str = "CONFIG_PATH";

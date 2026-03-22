@@ -196,7 +196,6 @@ static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\btime=(\w+)\b")
 static FILTER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bfilter=(\w+)\b").unwrap());
 
 fn parse_subscribe_message(input: String) -> Result<(SubscriptionArgs,), ParseError> {
-
     let subreddit_match = SUBREDDIT_RE
         .find(&input)
         .ok_or_else(|| ParseError::Custom("No subreddit given".into()))?;

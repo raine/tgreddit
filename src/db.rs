@@ -1,8 +1,8 @@
 use crate::{config::*, reddit::*, types::*};
 use anyhow::{Context, Result};
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Value, ValueRef};
-use rusqlite::{named_params, Connection, Row};
-use rusqlite_migration::{Migrations, M};
+use rusqlite::{Connection, Row, named_params};
+use rusqlite_migration::{M, Migrations};
 use std::convert::TryFrom;
 use std::path::Path;
 use std::str::FromStr;
