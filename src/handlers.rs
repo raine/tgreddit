@@ -5,13 +5,24 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use teloxide::payloads::{SendMessageSetters, SendPhotoSetters, SendVideoSetters};
 use teloxide::prelude::*;
-use teloxide::types::{InputFile, InputMedia, InputMediaPhoto, LinkPreviewOptions};
+use teloxide::types::{
+    InlineKeyboardMarkup, InputFile, InputMedia, InputMediaPhoto, LinkPreviewOptions,
+};
 use tempfile::TempDir;
 use tracing::*;
 
 use crate::{download, messages, reddit, state::AppState, ytdlp};
 
 pub async fn handle_new_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+    send_post(app, chat_id, post, None).await
+}
+
+pub async fn send_post(
+    app: &AppState,
+    chat_id: i64,
+    post: &reddit::Post,
+    keyboard: Option<InlineKeyboardMarkup>,
+) -> Result<()> {
     info!("got new {post:#?}");
     let mut post = Cow::Borrowed(post);
 
@@ -24,33 +35,42 @@ pub async fn handle_new_post(app: &AppState, chat_id: i64, post: &reddit::Post) 
     }
 
     match post.post_type {
-        reddit::PostType::Image => handle_image(app, chat_id, &post).await,
-        reddit::PostType::Video => handle_video(app, chat_id, &post).await,
-        reddit::PostType::Link => handle_link(app, chat_id, &post).await,
-        reddit::PostType::SelfText => handle_self_post(app, chat_id, &post).await,
-        reddit::PostType::Gallery => handle_gallery(app, chat_id, &post).await,
+        reddit::PostType::Image => handle_image(app, chat_id, &post, keyboard).await,
+        reddit::PostType::Video => handle_video(app, chat_id, &post, keyboard).await,
+        reddit::PostType::Link => handle_link(app, chat_id, &post, keyboard).await,
+        reddit::PostType::SelfText => handle_self_post(app, chat_id, &post, keyboard).await,
+        reddit::PostType::Gallery => handle_gallery(app, chat_id, &post, keyboard).await,
         // /r/bestof posts have no characteristics like post_hint that could be used to
         // determine them as a type of Link; as a workaround, post Unknown post types the same way
         // as a link
         reddit::PostType::Unknown => {
             warn!("unknown post type, post={post:?}");
-            handle_link(app, chat_id, &post).await
+            handle_link(app, chat_id, &post, keyboard).await
         }
     }
 }
 
-async fn handle_video(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_video(
+    app: &AppState,
+    chat_id: i64,
+    post: &reddit::Post,
+    keyboard: Option<InlineKeyboardMarkup>,
+) -> Result<()> {
     // The temporary directory will be deleted when _tmp_dir is dropped
     let (video, _tmp_dir) = ytdlp::download(&post.url).await?;
     info!("got a video: {video:?}");
     let caption = messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
-    app.tg
+    let mut req = app
+        .tg
         .send_video(ChatId(chat_id), InputFile::file(&video.path))
         .parse_mode(teloxide::types::ParseMode::Html)
         .caption(&caption)
         .height(video.height.into())
-        .width(video.width.into())
-        .await?;
+        .width(video.width.into());
+    if let Some(kb) = keyboard {
+        req = req.reply_markup(kb);
+    }
+    req.await?;
     info!(
         "video uploaded post_id={} chat_id={chat_id} video={video:?}",
         post.id
@@ -58,16 +78,25 @@ async fn handle_video(app: &AppState, chat_id: i64, post: &reddit::Post) -> Resu
     Ok(())
 }
 
-async fn handle_image(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_image(
+    app: &AppState,
+    chat_id: i64,
+    post: &reddit::Post,
+    keyboard: Option<InlineKeyboardMarkup>,
+) -> Result<()> {
     match download::download_url_to_tmp(&app.http, &post.url).await {
         Ok((path, _tmp_dir)) => {
             let caption =
                 messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
-            app.tg
+            let mut req = app
+                .tg
                 .send_photo(ChatId(chat_id), InputFile::file(path))
                 .parse_mode(teloxide::types::ParseMode::Html)
-                .caption(&caption)
-                .await?;
+                .caption(&caption);
+            if let Some(kb) = keyboard {
+                req = req.reply_markup(kb);
+            }
+            req.await?;
             info!("image uploaded post_id={} chat_id={chat_id}", post.id);
             Ok(())
         }
@@ -78,21 +107,36 @@ async fn handle_image(app: &AppState, chat_id: i64, post: &reddit::Post) -> Resu
     }
 }
 
-async fn handle_link(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_link(
+    app: &AppState,
+    chat_id: i64,
+    post: &reddit::Post,
+    keyboard: Option<InlineKeyboardMarkup>,
+) -> Result<()> {
     let message_html =
         messages::format_link_message_html(post, app.config.links_base_url.as_deref());
-    app.tg
+    let mut req = app
+        .tg
         .send_message(ChatId(chat_id), message_html)
-        .parse_mode(teloxide::types::ParseMode::Html)
-        .await?;
+        .parse_mode(teloxide::types::ParseMode::Html);
+    if let Some(kb) = keyboard {
+        req = req.reply_markup(kb);
+    }
+    req.await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
 }
 
-async fn handle_self_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_self_post(
+    app: &AppState,
+    chat_id: i64,
+    post: &reddit::Post,
+    keyboard: Option<InlineKeyboardMarkup>,
+) -> Result<()> {
     let message_html =
         messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
-    app.tg
+    let mut req = app
+        .tg
         .send_message(ChatId(chat_id), message_html)
         .parse_mode(teloxide::types::ParseMode::Html)
         .link_preview_options(LinkPreviewOptions {
@@ -101,13 +145,21 @@ async fn handle_self_post(app: &AppState, chat_id: i64, post: &reddit::Post) -> 
             prefer_small_media: false,
             prefer_large_media: false,
             show_above_text: false,
-        })
-        .await?;
+        });
+    if let Some(kb) = keyboard {
+        req = req.reply_markup(kb);
+    }
+    req.await?;
     info!("message sent post_id={} chat_id={chat_id}", post.id);
     Ok(())
 }
 
-async fn handle_gallery(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
+async fn handle_gallery(
+    app: &AppState,
+    chat_id: i64,
+    post: &reddit::Post,
+    keyboard: Option<InlineKeyboardMarkup>,
+) -> Result<()> {
     let gallery_data_items = &post
         .gallery_data
         .as_ref()
@@ -158,6 +210,14 @@ async fn handle_gallery(app: &AppState, chat_id: i64, post: &reddit::Post) -> Re
         .send_media_group(ChatId(chat_id), media_group)
         .await?;
     info!("gallery uploaded post_id={} chat_id={chat_id}", post.id);
+
+    // Media groups don't support inline keyboards, so send keyboard as a separate reply
+    if let Some(kb) = keyboard {
+        app.tg
+            .send_message(ChatId(chat_id), "·")
+            .reply_markup(kb)
+            .await?;
+    }
 
     Ok(())
 }

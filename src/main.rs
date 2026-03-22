@@ -18,6 +18,7 @@ use tracing::*;
 
 mod args;
 mod bot;
+mod browse;
 mod config;
 mod db;
 mod download;

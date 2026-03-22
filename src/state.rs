@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use teloxide::prelude::*;
 
+use crate::browse::{BrowseSession, BrowseSessions};
 use crate::config::Config;
 use crate::db::Database;
 
@@ -9,6 +11,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub http: reqwest::Client,
     pub tg: Arc<Bot>,
+    pub browse_sessions: BrowseSessions,
     db: Mutex<Database>,
 }
 
@@ -18,6 +21,7 @@ impl AppState {
             config,
             http,
             tg,
+            browse_sessions: Mutex::new(HashMap::<String, BrowseSession>::new()),
             db: Mutex::new(db),
         }
     }

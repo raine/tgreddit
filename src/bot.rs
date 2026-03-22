@@ -5,7 +5,10 @@ use regex::Regex;
 use std::sync::{Arc, LazyLock};
 use teloxide::{
     dispatching::DefaultKey,
-    types::{InlineKeyboardButton, InlineKeyboardMarkup, MessageId},
+    types::{
+        CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage,
+        MessageId,
+    },
     utils::command::{BotCommands, ParseError},
 };
 
@@ -103,6 +106,69 @@ pub async fn handle_command(
         error!("failed to handle message: {}", err);
         tg.send_message(message.chat.id, "Something went wrong")
             .await?;
+    }
+
+    Ok(())
+}
+
+async fn handle_browse_next(
+    q: &CallbackQuery,
+    tg: &Bot,
+    app: &AppState,
+    session_id: &str,
+) -> Result<()> {
+    // Remove keyboard from the clicked message
+    if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
+        let _ = tg.edit_message_reply_markup(msg.chat.id, msg.id).await;
+    }
+
+    browse::cleanup_expired(&app.browse_sessions);
+
+    let next = {
+        let mut sessions = app.browse_sessions.lock().unwrap();
+        match sessions.get_mut(session_id) {
+            Some(session) if !session.is_expired() && session.has_next() => {
+                session.current_index += 1;
+                let post = session.current_post().clone();
+                let chat_id = session.chat_id;
+                let keyboard = browse::build_keyboard(session_id, session);
+                Some((post, chat_id, keyboard))
+            }
+            _ => {
+                sessions.remove(session_id);
+                None
+            }
+        }
+    };
+
+    match next {
+        Some((post, chat_id, keyboard)) => {
+            handlers::send_post(app, chat_id, &post, Some(keyboard)).await?;
+        }
+        None => {
+            if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
+                tg.send_message(msg.chat.id, "Session expired, run /get again")
+                    .await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_browse_stop(
+    q: &CallbackQuery,
+    tg: &Bot,
+    app: &AppState,
+    session_id: &str,
+) -> Result<()> {
+    {
+        app.browse_sessions.lock().unwrap().remove(session_id);
+    }
+
+    // Remove keyboard from the clicked message
+    if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
+        let _ = tg.edit_message_reply_markup(msg.chat.id, msg.id).await;
     }
 
     Ok(())
@@ -232,15 +298,34 @@ async fn handle_get(
 
     debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
 
-    if !posts.is_empty() {
-        for post in posts {
-            if let Err(e) = handlers::handle_new_post(app, chat_id, &post).await {
-                error!("failed to handle new post: {e}");
-            }
-        }
-    } else {
+    if posts.is_empty() {
         tg.send_message(message.chat.id, "No posts found").await?;
+        return Ok(());
     }
+
+    // Single post: send directly without browse UI
+    if posts.len() == 1 {
+        if let Err(e) = handlers::handle_new_post(app, chat_id, &posts[0]).await {
+            error!("failed to handle new post: {e}");
+        }
+        return Ok(());
+    }
+
+    // Multiple posts: create browse session and send first post with navigation
+    let session_id = browse::generate_session_id();
+    let session = browse::BrowseSession::new(posts, chat_id);
+    let post = session.current_post().clone();
+    let keyboard = browse::build_keyboard(&session_id, &session);
+    app.browse_sessions
+        .lock()
+        .unwrap()
+        .insert(session_id, session);
+    browse::cleanup_expired(&app.browse_sessions);
+
+    if let Err(e) = handlers::send_post(app, chat_id, &post, Some(keyboard)).await {
+        error!("failed to handle new post: {e}");
+    }
+
     Ok(())
 }
 
@@ -313,9 +398,34 @@ pub async fn handle_callback_query(
     tg: Arc<Bot>,
     app: Arc<AppState>,
 ) -> Result<()> {
-    tg.answer_callback_query(q.id).await?;
+    // Clone id so q remains fully usable for browse handlers that need &q
+    tg.answer_callback_query(q.id.clone()).await?;
 
     let data = q.data.as_deref().unwrap_or("");
+
+    // Browse session callbacks — handle before extracting msg/chat_id since
+    // browse handlers access q.message via MaybeInaccessibleMessage matching
+    if data == "noop" {
+        return Ok(());
+    }
+    if let Some(session_id) = data.strip_prefix("gn:") {
+        let result = handle_browse_next(&q, &tg, &app, session_id).await;
+        if let Err(err) = result {
+            error!("failed to handle browse next: {err}");
+            if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
+                tg.send_message(msg.chat.id, "Something went wrong").await?;
+            }
+        }
+        return Ok(());
+    }
+    if let Some(session_id) = data.strip_prefix("gs:") {
+        if let Err(err) = handle_browse_stop(&q, &tg, &app, session_id).await {
+            error!("failed to handle browse stop: {err}");
+        }
+        return Ok(());
+    }
+
+    // Subscription callbacks
     let msg = q.message.as_ref().context("no message in callback query")?;
     let chat_id = msg.chat().id;
     let msg_id = msg.id();
