@@ -1,6 +1,6 @@
 [package]
 name = "tgreddit"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 description = "Get the top posts of your favorite subreddits to Telegram"
 license = "MIT"
