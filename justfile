@@ -43,3 +43,7 @@ dev *FLAGS:
 # Install release binary globally
 install:
     cargo install --path .
+
+# Release a new version (patch, minor, or major)
+release bump:
+    @scripts/release {{bump}}

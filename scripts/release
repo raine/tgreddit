@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bump="${1:-}"
+
+if [[ -z "$bump" ]]; then
+	echo "usage: scripts/release <patch|minor|major>" >&2
+	exit 1
+fi
+
+if [[ "$bump" != "patch" && "$bump" != "minor" && "$bump" != "major" ]]; then
+	echo "error: bump must be patch, minor, or major (got: $bump)" >&2
+	exit 1
+fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+	echo "error: working tree has uncommitted changes" >&2
+	exit 1
+fi
+
+echo "Running checks..."
+just check
+
+# Read current version
+current=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+IFS='.' read -r major minor patch_v <<< "$current"
+
+case "$bump" in
+	major) major=$((major + 1)); minor=0; patch_v=0 ;;
+	minor) minor=$((minor + 1)); patch_v=0 ;;
+	patch) patch_v=$((patch_v + 1)) ;;
+esac
+
+VERSION="${major}.${minor}.${patch_v}"
+
+# Rollback on failure
+cleanup() {
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		echo "Failure detected, rolling back version changes..." >&2
+		git restore Cargo.toml Cargo.lock 2>/dev/null || true
+	fi
+	exit $rc
+}
+trap cleanup EXIT
+
+sed -i '' "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+cargo check --quiet 2>/dev/null # update Cargo.lock
+
+trap - EXIT
+
+git add Cargo.toml Cargo.lock
+git commit -m "$VERSION"
+git tag "v$VERSION"
+git push
+git push --tags
+
+echo ""
+echo "Pushed v${VERSION} — CI will build and push Docker image."
