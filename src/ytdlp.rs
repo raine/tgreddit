@@ -1,10 +1,5 @@
 use anyhow::{Context, Result};
-use std::{
-    ffi::OsString,
-    fs,
-    path::Path,
-    sync::LazyLock,
-};
+use std::{ffi::OsString, fs, path::Path, sync::LazyLock};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{error, info};
@@ -41,8 +36,14 @@ pub async fn download(url: &str) -> Result<(Video, TempDir)> {
         .spawn()
         .context("failed to run yt-dlp")?;
 
-    let stdout = child.stdout.take().context("failed to capture yt-dlp stdout")?;
-    let stderr = child.stderr.take().context("failed to capture yt-dlp stderr")?;
+    let stdout = child
+        .stdout
+        .take()
+        .context("failed to capture yt-dlp stdout")?;
+    let stderr = child
+        .stderr
+        .take()
+        .context("failed to capture yt-dlp stderr")?;
 
     // Stream stdout and stderr concurrently
     let stdout_task = tokio::spawn(async move {
@@ -74,8 +75,8 @@ pub async fn download(url: &str) -> Result<(Video, TempDir)> {
         .next()
         .context("no video file found in temp dir")?;
 
-    let dimensions = parse_dimensions_from_path(&video_path)
-        .context("video filename should have dimensions")?;
+    let dimensions =
+        parse_dimensions_from_path(&video_path).context("video filename should have dimensions")?;
 
     let video = Video {
         path: video_path,
