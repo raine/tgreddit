@@ -24,7 +24,7 @@ strum = "0.24.1"
 strum_macros = "0.24.3"
 teloxide = { version = "0.12.2", features = ["macros", "auto-send"] }
 tempfile = "3"
-thiserror = "1.0.34"
+thiserror = "2"
 tokio = { version = "1.21.0", features = ["rt-multi-thread", "macros", "sync"] }
 toml = "1"
 url = "2.2.2"
