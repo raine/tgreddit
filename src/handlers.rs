@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use teloxide::payloads::{SendMessageSetters, SendPhotoSetters, SendVideoSetters};
 use teloxide::prelude::*;
 use teloxide::types::{InputFile, InputMedia, InputMediaPhoto, LinkPreviewOptions};
@@ -19,8 +19,8 @@ pub async fn handle_new_post(app: &AppState, chat_id: i64, post: &reddit::Post) 
     // but not always
     // TODO: It appears that post with is_gallery=true will never have post_hint set
     if post.post_hint.is_none() {
-        info!("post missing post_hint, getting like directly");
-        post = Cow::Owned(reddit::get_link(&app.http, &post.id).await.unwrap());
+        info!("post missing post_hint, getting link directly");
+        post = Cow::Owned(reddit::get_link(&app.http, &post.id).await?);
     }
 
     match post.post_type {
@@ -41,7 +41,7 @@ pub async fn handle_new_post(app: &AppState, chat_id: i64, post: &reddit::Post) 
 
 async fn handle_video(app: &AppState, chat_id: i64, post: &reddit::Post) -> Result<()> {
     // The temporary directory will be deleted when _tmp_dir is dropped
-    let (video, _tmp_dir) = tokio::task::block_in_place(|| ytdlp::download(&post.url))?;
+    let (video, _tmp_dir) = ytdlp::download(&post.url).await?;
     info!("got a video: {video:?}");
     let caption = messages::format_media_caption_html(post, app.config.links_base_url.as_deref());
     app.tg
@@ -111,12 +111,12 @@ async fn handle_gallery(app: &AppState, chat_id: i64, post: &reddit::Post) -> Re
     let gallery_data_items = &post
         .gallery_data
         .as_ref()
-        .expect("expected gallery_data to exist in gallery post")
+        .context("expected gallery_data to exist in gallery post")?
         .items;
     let media_metadata_map = post
         .media_metadata
         .as_ref()
-        .expect("expected media_metadata to exist in gallery post");
+        .context("expected media_metadata to exist in gallery post")?;
 
     // Download all gallery images into a single temp directory
     let tmp_dir = TempDir::with_prefix("tgreddit-gallery")?;

@@ -3,7 +3,9 @@ use crate::*;
 use itertools::Itertools;
 
 fn escape(html: &str) -> String {
-    html.replace('<', "&lt;").replace('>', "&gt;")
+    html.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn format_html_anchor(href: &str, text: &str) -> String {
@@ -32,7 +34,7 @@ fn format_meta_html(post: &reddit::Post, links_base_url: Option<&str>) -> String
 }
 
 pub fn format_media_caption_html(post: &reddit::Post, links_base_url: Option<&str>) -> String {
-    let title = &post.title;
+    let title = escape(&post.title);
     let meta = format_meta_html(post, links_base_url);
     format!("{title}\n{meta}")
 }
@@ -84,7 +86,11 @@ mod tests {
         assert_eq!(
             format_html_anchor("https://example.com", "<hello></world>"),
             r#"<a href="https://example.com">&lt;hello&gt;&lt;/world&gt;</a>"#
-        )
+        );
+        assert_eq!(
+            format_html_anchor("https://example.com", "foo & bar"),
+            r#"<a href="https://example.com">foo &amp; bar</a>"#
+        );
     }
 
     #[test]

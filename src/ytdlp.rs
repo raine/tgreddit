@@ -1,12 +1,12 @@
-use anyhow::Result;
-use duct::cmd;
+use anyhow::{Context, Result};
 use std::{
     ffi::OsString,
     fs,
-    io::{BufRead, BufReader},
     path::Path,
     sync::LazyLock,
 };
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tracing::{error, info};
 
 use crate::types::*;
@@ -27,41 +27,54 @@ fn make_ytdlp_args(output: &Path, url: &str) -> Vec<OsString> {
 }
 
 /// Downloads given url with yt-dlp and returns path to video
-pub fn download(url: &str) -> Result<(Video, TempDir)> {
+pub async fn download(url: &str) -> Result<(Video, TempDir)> {
     let tmp_dir = TempDir::with_prefix("tgreddit")?;
-    let tmp_path = tmp_dir.path();
-    let ytdlp_args = make_ytdlp_args(tmp_dir.path(), url);
+    let tmp_path = tmp_dir.path().to_owned();
+    let ytdlp_args = make_ytdlp_args(&tmp_path, url);
 
     info!("running yt-dlp with arguments {:?}", ytdlp_args);
-    let duct_exp = cmd("yt-dlp", ytdlp_args).stderr_to_stdout();
-    let reader = match duct_exp.reader() {
-        Ok(child) => child,
-        Err(err) => {
-            error!("failed to run yt-dlp:\n{}", err);
-            return Err(anyhow::anyhow!(err));
-        }
-    };
+    let mut child = Command::new("yt-dlp")
+        .args(&ytdlp_args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("failed to run yt-dlp")?;
 
-    let lines = BufReader::new(reader).lines();
-    for line_result in lines {
-        match line_result {
-            Ok(line) => info!("{line}"),
-            Err(_) => {
-                error!("failed to read yt-dlp output");
-                return Err(anyhow::anyhow!("failed to read yt-dlp output"));
-            }
+    let stdout = child.stdout.take().context("failed to capture yt-dlp stdout")?;
+    let stderr = child.stderr.take().context("failed to capture yt-dlp stderr")?;
+
+    // Stream stdout and stderr concurrently
+    let stdout_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            info!("{line}");
         }
+    });
+
+    let stderr_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            error!("yt-dlp stderr: {line}");
+        }
+    });
+
+    let status = child.wait().await.context("failed to wait for yt-dlp")?;
+    let _ = tokio::join!(stdout_task, stderr_task);
+
+    if !status.success() {
+        anyhow::bail!("yt-dlp exited with status: {}", status);
     }
 
     // yt-dlp is expected to write a single file, which is the video, to tmp_path
-    let video_path = fs::read_dir(tmp_path)
-        .expect("could not read files in temp dir")
-        .map(|de| de.unwrap().path())
+    let video_path = fs::read_dir(&tmp_path)
+        .context("could not read files in temp dir")?
+        .filter_map(|de| de.ok())
+        .map(|de| de.path())
         .next()
-        .expect("video file in temp dir");
+        .context("no video file found in temp dir")?;
 
-    let dimensions =
-        parse_dimensions_from_path(&video_path).expect("video filename should have dimensions");
+    let dimensions = parse_dimensions_from_path(&video_path)
+        .context("video filename should have dimensions")?;
 
     let video = Video {
         path: video_path,

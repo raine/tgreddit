@@ -27,7 +27,7 @@ pub async fn download_url_to_dir(
     dir: &Path,
 ) -> Result<PathBuf> {
     info!("downloading {url}");
-    let mut res = client.get(url).send().await?;
+    let mut res = client.get(url).send().await?.error_for_status()?;
     let parsed_url = Url::parse(url)?;
     let tmp_filename = Path::new(parsed_url.path())
         .file_name()
@@ -37,7 +37,7 @@ pub async fn download_url_to_dir(
         .map_err(|_| anyhow::anyhow!("failed to create file {:?}", file_path))?;
 
     while let Some(bytes) = res.chunk().await? {
-        file.write(&bytes)
+        file.write_all(&bytes)
             .map_err(|_| anyhow::anyhow!("error writing to file {:?}", file_path))?;
     }
 
