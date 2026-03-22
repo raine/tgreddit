@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.suffix }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            builder: cargo
+            suffix: darwin-arm64
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            builder: cargo
+            suffix: darwin-x64
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            builder: cross
+            suffix: linux-x64
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+            builder: cross
+            suffix: linux-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.builder == 'cross'
+        uses: taiki-e/install-action@cross
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: |
+          FEATURES=""
+          if [ "${{ matrix.builder }}" = "cross" ]; then
+            FEATURES="--features vendored-openssl"
+            cross build --release --target ${{ matrix.target }} --locked $FEATURES
+          else
+            cargo build --release --target ${{ matrix.target }} --locked $FEATURES
+          fi
+
+      - name: Stage release archive
+        run: |
+          mkdir -p gh-release
+          ARCHIVE="tgreddit-${{ matrix.suffix }}.tar.gz"
+          tar -czf "gh-release/$ARCHIVE" \
+            -C "target/${{ matrix.target }}/release" \
+            tgreddit
+          (cd gh-release && shasum -a 256 "$ARCHIVE" > "${ARCHIVE%.tar.gz}.sha256")
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gh-release-${{ matrix.suffix }}
+          path: gh-release/
+          retention-days: 1
+
+  github-release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: gh-release-*
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PRERELEASE=""
+          if [[ "$GITHUB_REF_NAME" == *"beta"* ]]; then
+            PRERELEASE="--prerelease"
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, uploading assets..."
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/* \
+              --verify-tag \
+              --generate-notes \
+              $PRERELEASE
+          fi
