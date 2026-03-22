@@ -18,6 +18,7 @@ RUN rustup target add aarch64-unknown-linux-gnu
 RUN apt-get update && apt-get install -y \
   gcc gcc-aarch64-linux-gnu musl-tools libssl-dev perl cmake make \
   && rm -rf /var/lib/apt/lists/*
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,id=cargo-registry-${TARGETARCH},target=/usr/local/cargo/registry \
   if [ "$TARGETARCH" = "arm64" ]; then \
@@ -30,6 +31,10 @@ FROM --platform=linux/amd64 rust:1.90.0-slim-bookworm as builder
 ARG TARGETARCH
 WORKDIR /app
 RUN rustup target add aarch64-unknown-linux-gnu
+RUN apt-get update && apt-get install -y \
+  gcc gcc-aarch64-linux-gnu libssl-dev perl cmake make \
+  && rm -rf /var/lib/apt/lists/*
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY --from=cacher /app/target target
