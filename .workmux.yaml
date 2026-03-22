@@ -3,4 +3,5 @@ post_create:
 
 files:
   symlink:
+    - '<global>'
     - config.toml
