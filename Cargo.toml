@@ -13,7 +13,7 @@ itertools = "0.14"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 regex = { version = "1", default-features = false, features = ["std", "unicode-perl"] }
-reqwest = { version = "0.13", features = ["json", "query"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "native-tls"] }
 rusqlite = { version = "0.39", features = ["chrono", "bundled"] }
 rusqlite_migration = "2"
 secrecy = { version = "0.10", features = ["serde"] }
