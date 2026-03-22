@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::*;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer};
-use strum_macros::{Display, EnumString};
+use strum::{Display, EnumString};
 use url::Url;
 
 #[derive(Display, Debug, Clone, PartialEq, Hash, Eq, Deserialize, Copy, EnumString)]
