@@ -121,6 +121,11 @@ async fn handle_sub(
     mut args: SubscriptionArgs,
 ) -> Result<()> {
     let chat_id = message.chat.id.0;
+    if args.subreddit.is_empty() {
+        tg.send_message(ChatId(chat_id), "Usage: /sub <subreddit>")
+            .await?;
+        return Ok(());
+    }
     let subreddit_about = reddit::get_subreddit_about(&args.subreddit).await;
     match subreddit_about {
         Ok(data) => {
@@ -195,6 +200,11 @@ async fn handle_get(
     app: &AppState,
     args: SubscriptionArgs,
 ) -> Result<()> {
+    if args.subreddit.is_empty() {
+        tg.send_message(message.chat.id, "Usage: /get <subreddit>")
+            .await?;
+        return Ok(());
+    }
     let subreddit = &args.subreddit;
     let limit = args
         .limit
@@ -240,6 +250,15 @@ static TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\btime=(\w+)\b")
 static FILTER_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bfilter=(\w+)\b").unwrap());
 
 fn parse_subscribe_message(input: String) -> Result<(SubscriptionArgs,), ParseError> {
+    if input.trim().is_empty() {
+        return Ok((SubscriptionArgs {
+            subreddit: String::new(),
+            limit: None,
+            time: None,
+            filter: None,
+        },));
+    }
+
     let subreddit_match = SUBREDDIT_RE
         .find(&input)
         .ok_or_else(|| ParseError::Custom("No subreddit given".into()))?;
