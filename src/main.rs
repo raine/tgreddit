@@ -40,9 +40,14 @@ async fn main() -> Result<()> {
     let config = Arc::new(config::read_config());
     info!("starting with config: {config:#?}");
 
+    let reddit_user_agent = config
+        .reddit_user_agent
+        .as_deref()
+        .unwrap_or(reddit::api::APP_USER_AGENT);
     let http = reqwest::Client::builder()
-        .user_agent(reddit::api::APP_USER_AGENT)
+        .user_agent(reddit_user_agent)
         .build()?;
+    let reddit = reddit::RedditClient::new(config.reddit_client_id.clone(), reddit_user_agent)?;
 
     let mut db = db::Database::open(&config)?;
     db.migrate()?;
@@ -50,7 +55,7 @@ async fn main() -> Result<()> {
     let tg = Arc::new(Bot::new(config.telegram_bot_token.expose_secret()));
     tg.set_my_commands(bot::Command::bot_commands()).await?;
 
-    let app = Arc::new(AppState::new(config.clone(), http, tg.clone(), db));
+    let app = Arc::new(AppState::new(config.clone(), http, reddit, tg.clone(), db));
 
     let (shutdown_tx, mut shutdown_rx) = broadcast::channel::<()>(1);
     let shutdown = Arc::new(AtomicBool::new(false));
@@ -63,7 +68,7 @@ async fn main() -> Result<()> {
     //        tgreddit --debug-post <linkid> --chat-id <chatid> => Also send to telegram
     let opts = args::parse_args();
     if let Some(post_id) = opts.opt_str("debug-post") {
-        let post = reddit::get_link(&app.http, &post_id).await.unwrap();
+        let post = reddit::get_link(&app.reddit, &post_id).await.unwrap();
         info!("{:#?}", post);
         if let Some(chat_id) = opts.opt_str("chat-id") {
             return handlers::handle_new_post(&app, chat_id.parse().unwrap(), &post).await;
@@ -201,7 +206,7 @@ async fn check_new_posts_for_subscription(app: &AppState, sub: &Subscription) ->
         chat_id = chat_id
     );
 
-    let posts = reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time).await?;
+    let posts = reddit::get_subreddit_top_posts(&app.reddit, subreddit, limit, &time).await?;
     debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
 
     // First run should not send anything to telegram but the post should be marked

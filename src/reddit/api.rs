@@ -1,15 +1,121 @@
 use super::*;
 use anyhow::{Context, Result};
-use reqwest::StatusCode;
+use reqwest::{RequestBuilder, StatusCode};
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
 use thiserror::Error;
+use tokio::{sync::Mutex, time::Instant};
 use tracing::{error, info};
 use url::Url;
 
 static REDDIT_BASE_URL: &str = "https://www.reddit.com";
+static REDDIT_OAUTH_BASE_URL: &str = "https://oauth.reddit.com";
+static REDDIT_ACCESS_TOKEN_URL: &str = "https://www.reddit.com/api/v1/access_token";
 pub static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
-fn get_base_url() -> Url {
-    Url::parse(REDDIT_BASE_URL).unwrap()
+struct CachedAccessToken {
+    value: SecretString,
+    expires_at: Instant,
+}
+
+#[derive(Deserialize)]
+struct AccessTokenResponse {
+    access_token: String,
+    expires_in: u64,
+}
+
+pub struct RedditClient {
+    http: reqwest::Client,
+    no_redirect_http: reqwest::Client,
+    client_id: Option<String>,
+    access_token: Mutex<Option<CachedAccessToken>>,
+}
+
+impl RedditClient {
+    pub fn new(client_id: Option<String>, user_agent: &str) -> Result<Self> {
+        let http = reqwest::Client::builder().user_agent(user_agent).build()?;
+        let no_redirect_http = reqwest::Client::builder()
+            .user_agent(user_agent)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?;
+        Ok(Self {
+            http,
+            no_redirect_http,
+            client_id,
+            access_token: Mutex::new(None),
+        })
+    }
+
+    async fn get(&self, path: &str) -> Result<RequestBuilder> {
+        self.get_with_client(&self.http, path).await
+    }
+
+    async fn get_without_redirects(&self, path: &str) -> Result<RequestBuilder> {
+        self.get_with_client(&self.no_redirect_http, path).await
+    }
+
+    async fn get_with_client(
+        &self,
+        client: &reqwest::Client,
+        path: &str,
+    ) -> Result<RequestBuilder> {
+        let base_url = if self.client_id.is_some() {
+            REDDIT_OAUTH_BASE_URL
+        } else {
+            REDDIT_BASE_URL
+        };
+        let url = Url::parse(base_url)?.join(path)?;
+        let mut request = client.get(url);
+        if self.client_id.is_some() {
+            let access_token = self.access_token().await?;
+            request = request.bearer_auth(access_token.expose_secret());
+        }
+        Ok(request)
+    }
+
+    async fn access_token(&self) -> Result<SecretString> {
+        let client_id = self
+            .client_id
+            .as_deref()
+            .context("Reddit OAuth client ID is missing")?;
+        let mut cached = self.access_token.lock().await;
+        if let Some(token) = cached.as_ref()
+            && token.expires_at > Instant::now()
+        {
+            return Ok(token.value.clone());
+        }
+
+        info!("requesting Reddit OAuth access token");
+        let response = self
+            .http
+            .post(REDDIT_ACCESS_TOKEN_URL)
+            .basic_auth(client_id, Some(""))
+            .form(&[
+                (
+                    "grant_type",
+                    "https://oauth.reddit.com/grants/installed_client",
+                ),
+                ("device_id", "DO_NOT_TRACK_THIS_DEVICE"),
+            ])
+            .send()
+            .await?;
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .context("failed to read Reddit OAuth response body")?;
+        ensure_successful_response(status, &body)?;
+
+        let response: AccessTokenResponse =
+            serde_json::from_str(&body).context("failed to decode Reddit OAuth response body")?;
+        let token = SecretString::from(response.access_token);
+        let lifetime = std::time::Duration::from_secs(response.expires_in.saturating_sub(60));
+        *cached = Some(CachedAccessToken {
+            value: token.clone(),
+            expires_at: Instant::now() + lifetime,
+        });
+        Ok(token)
+    }
 }
 
 pub fn format_url_from_path(path: &str, base_url: Option<&str>) -> String {
@@ -32,17 +138,15 @@ pub fn format_subreddit_url(subreddit: &str, base_url: Option<&str>) -> String {
 }
 
 pub async fn get_subreddit_top_posts(
-    client: &reqwest::Client,
+    client: &RedditClient,
     subreddit: &str,
     limit: u32,
     time: &TopPostsTimePeriod,
 ) -> Result<Vec<Post>> {
     info!("getting top posts for /r/{subreddit} limit={limit} time={time:?}");
-    let url = get_base_url()
-        .join(&format!("/r/{subreddit}/top.json"))
-        .unwrap();
     let response = client
-        .get(url)
+        .get(&format!("/r/{subreddit}/top.json"))
+        .await?
         .query(&[
             ("limit", &limit.to_string()),
             ("t", &format!("{:?}", time).to_lowercase()),
@@ -102,11 +206,11 @@ pub fn is_network_security_block(error: &anyhow::Error) -> bool {
     )
 }
 
-pub async fn get_link(client: &reqwest::Client, link_id: &str) -> Result<Post> {
+pub async fn get_link(client: &RedditClient, link_id: &str) -> Result<Post> {
     info!("getting link id {link_id}");
-    let url = get_base_url().join("/api/info.json")?;
     let res = client
-        .get(url)
+        .get("/api/info.json")
+        .await?
         .query(&[("id", &format!("t3_{link_id}"))])
         .send()
         .await
@@ -147,26 +251,26 @@ pub enum SubredditAboutError {
     #[error("no such subreddit")]
     NoSuchSubreddit,
     #[error(transparent)]
+    Api(#[from] anyhow::Error),
+    #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-    #[error(transparent)]
-    UrlParseError(#[from] url::ParseError),
-    #[error(transparent)]
-    IO(#[from] std::io::Error),
 }
 
-/// Uses a separate no-redirect client to detect non-existent subreddits via 302.
-/// Called infrequently (only on /sub command), so building a client here is fine.
-pub async fn get_subreddit_about(subreddit: &str) -> Result<SubredditAbout, SubredditAboutError> {
+pub async fn get_subreddit_about(
+    client: &RedditClient,
+    subreddit: &str,
+) -> Result<SubredditAbout, SubredditAboutError> {
     info!("getting subreddit about for /r/{subreddit}");
-    let client = reqwest::Client::builder()
-        .user_agent(APP_USER_AGENT)
-        .redirect(reqwest::redirect::Policy::none())
-        .build()?;
-    let url = get_base_url().join(&format!("/r/{subreddit}/about.json"))?;
-    let res = client.get(url).send().await?;
+    let res = client
+        .get_without_redirects(&format!("/r/{subreddit}/about.json"))
+        .await?
+        .send()
+        .await?;
 
     match res.status() {
-        reqwest::StatusCode::FOUND => Err(SubredditAboutError::NoSuchSubreddit),
+        reqwest::StatusCode::FOUND | reqwest::StatusCode::NOT_FOUND => {
+            Err(SubredditAboutError::NoSuchSubreddit)
+        }
         _ => {
             let data = res.json::<SubredditAboutResponse>().await?.data;
             Ok(data)

@@ -6,20 +6,29 @@ use teloxide::prelude::*;
 use crate::browse::{BrowseSession, BrowseSessions};
 use crate::config::Config;
 use crate::db::Database;
+use crate::reddit::RedditClient;
 
 pub struct AppState {
     pub config: Arc<Config>,
     pub http: reqwest::Client,
+    pub reddit: RedditClient,
     pub tg: Arc<Bot>,
     pub browse_sessions: BrowseSessions,
     db: Mutex<Database>,
 }
 
 impl AppState {
-    pub fn new(config: Arc<Config>, http: reqwest::Client, tg: Arc<Bot>, db: Database) -> Self {
+    pub fn new(
+        config: Arc<Config>,
+        http: reqwest::Client,
+        reddit: RedditClient,
+        tg: Arc<Bot>,
+        db: Database,
+    ) -> Self {
         Self {
             config,
             http,
+            reddit,
             tg,
             browse_sessions: Mutex::new(HashMap::<String, BrowseSession>::new()),
             db: Mutex::new(db),

@@ -22,6 +22,8 @@ pub struct Config {
     #[serde(default = "default_skip_initial_send")]
     pub skip_initial_send: bool,
     pub links_base_url: Option<String>,
+    pub reddit_client_id: Option<String>,
+    pub reddit_user_agent: Option<String>,
     pub default_limit: Option<u32>,
     pub default_time: Option<TopPostsTimePeriod>,
     pub default_filter: Option<PostType>,

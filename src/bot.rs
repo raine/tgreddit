@@ -192,7 +192,7 @@ async fn handle_sub(
             .await?;
         return Ok(());
     }
-    let subreddit_about = reddit::get_subreddit_about(&args.subreddit).await;
+    let subreddit_about = reddit::get_subreddit_about(&app.reddit, &args.subreddit).await;
     match subreddit_about {
         Ok(data) => {
             args.subreddit = data.display_name;
@@ -283,7 +283,7 @@ async fn handle_get(
     let filter = args.filter.or(app.config.default_filter);
     let chat_id = message.chat.id.0;
 
-    let posts = reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time)
+    let posts = reddit::get_subreddit_top_posts(&app.reddit, subreddit, limit, &time)
         .await
         .context("failed to get posts")?
         .into_iter()

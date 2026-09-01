@@ -130,6 +130,11 @@ authorized_user_ids = [123123123]
 # Bot token from @BotFather.
 telegram_bot_token = "..."
 
+# Optional Reddit OAuth credentials. OAuth avoids anonymous API throttling.
+# Create an "installed app" at https://www.reddit.com/prefs/apps and copy its client ID.
+reddit_client_id = "..."
+reddit_user_agent = "linux:tgreddit:0.2.0 (by /u/your_username)"
+
 # How often to check for new posts (seconds).
 check_interval_secs = 600
 

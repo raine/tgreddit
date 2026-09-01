@@ -1,6 +1,10 @@
 db_path = "/data/data.db3"
 authorized_user_ids = [123123123]
 telegram_bot_token = "xxx"
+# Reddit OAuth is optional. Create an "installed app" at
+# https://www.reddit.com/prefs/apps and set its client ID and an identifying user agent.
+# reddit_client_id = "xxx"
+# reddit_user_agent = "linux:tgreddit:0.2.0 (by /u/your_username)"
 check_interval_secs = 600
 skip_initial_send = true
 default_time = "week"

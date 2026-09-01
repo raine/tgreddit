@@ -31,7 +31,7 @@ pub async fn send_post(
     // TODO: It appears that post with is_gallery=true will never have post_hint set
     if post.post_hint.is_none() {
         info!("post missing post_hint, getting link directly");
-        post = Cow::Owned(reddit::get_link(&app.http, &post.id).await?);
+        post = Cow::Owned(reddit::get_link(&app.reddit, &post.id).await?);
     }
 
     match post.post_type {
