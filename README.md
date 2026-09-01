@@ -17,6 +17,15 @@ A self-hosted Telegram bot that monitors your favorite subreddits and sends you
 the top posts. All media is embedded directly in Telegram thanks to
 [yt-dlp][yt-dlp] — no need to open Reddit.
 
+## Project status
+
+> [!WARNING]
+> Reddit returns HTTP 403 "blocked by network security" for anonymous Data API
+> requests from this bot. Reddit's [Responsible Builder Policy][builder-policy]
+> requires explicit approval before any API data access, and OAuth credentials
+> alone do not constitute approval. Running tgreddit requires a Reddit-approved
+> Data API application.
+
 <p align="center">
   <img src="https://user-images.githubusercontent.com/11027/178097057-83b27933-9876-405a-b151-a148960819df.jpeg" width="20%">
   <img src="https://user-images.githubusercontent.com/11027/178096986-5f651336-8208-4c40-9c41-58c95173b24d.jpeg" width="20%">
@@ -130,8 +139,8 @@ authorized_user_ids = [123123123]
 # Bot token from @BotFather.
 telegram_bot_token = "..."
 
-# Optional Reddit OAuth credentials. OAuth avoids anonymous API throttling.
-# Create an "installed app" at https://www.reddit.com/prefs/apps and copy its client ID.
+# OAuth credentials from a Reddit-approved Data API application.
+# Request access at https://support.reddithelp.com/hc/en-us/requests/new?ticket_form_id=14868593862164
 reddit_client_id = "..."
 reddit_user_agent = "linux:tgreddit:0.2.0 (by /u/your_username)"
 
@@ -263,6 +272,7 @@ The project uses [`just`][just], [`direnv`][direnv] and [`entr`][entr].
 just dev
 ```
 
+[builder-policy]: https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy
 [yt-dlp]: https://github.com/yt-dlp/yt-dlp
 [ffmpeg]: https://ffmpeg.org/
 [telegram-web]: https://web.telegram.org/
