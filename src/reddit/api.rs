@@ -1,5 +1,6 @@
 use super::*;
 use anyhow::{Context, Result};
+use reqwest::StatusCode;
 use thiserror::Error;
 use tracing::{error, info};
 use url::Url;
@@ -40,23 +41,65 @@ pub async fn get_subreddit_top_posts(
     let url = get_base_url()
         .join(&format!("/r/{subreddit}/top.json"))
         .unwrap();
-    let res = client
+    let response = client
         .get(url)
         .query(&[
             ("limit", &limit.to_string()),
             ("t", &format!("{:?}", time).to_lowercase()),
         ])
         .send()
-        .await?
-        .json::<ListingResponse>()
         .await?;
-    let posts = res
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .context("failed to read Reddit response body")?;
+
+    ensure_successful_response(status, &body)?;
+    let response: ListingResponse =
+        serde_json::from_str(&body).context("failed to decode Reddit response body")?;
+    let posts = response
         .data
         .children
         .into_iter()
         .map(|e| Post::from(e.data))
         .collect();
     Ok(posts)
+}
+
+#[derive(Error, Debug)]
+enum RedditResponseError {
+    #[error("Reddit request failed with HTTP {0}: blocked by network security")]
+    NetworkSecurityBlock(StatusCode),
+    #[error("Reddit request failed with HTTP {status}: {detail}")]
+    Http { status: StatusCode, detail: String },
+}
+
+fn ensure_successful_response(status: StatusCode, body: &str) -> Result<()> {
+    if status.is_success() {
+        return Ok(());
+    }
+
+    if body.contains("blocked by network security") {
+        return Err(RedditResponseError::NetworkSecurityBlock(status).into());
+    }
+
+    let detail = body
+        .trim()
+        .lines()
+        .next()
+        .unwrap_or("empty response")
+        .chars()
+        .take(200)
+        .collect();
+    Err(RedditResponseError::Http { status, detail }.into())
+}
+
+pub fn is_network_security_block(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<RedditResponseError>(),
+        Some(RedditResponseError::NetworkSecurityBlock(_))
+    )
 }
 
 pub async fn get_link(client: &reqwest::Client, link_id: &str) -> Result<Post> {
@@ -128,5 +171,38 @@ pub async fn get_subreddit_about(subreddit: &str) -> Result<SubredditAbout, Subr
             let data = res.json::<SubredditAboutResponse>().await?.data;
             Ok(data)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reports_reddit_network_security_blocks() {
+        let error = ensure_successful_response(
+            StatusCode::FORBIDDEN,
+            "<html>You've been blocked by network security.</html>",
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Reddit request failed with HTTP 403 Forbidden: blocked by network security"
+        );
+        assert!(is_network_security_block(&error));
+    }
+
+    #[test]
+    fn distinguishes_other_http_errors() {
+        let error =
+            ensure_successful_response(StatusCode::TOO_MANY_REQUESTS, "slow down").unwrap_err();
+
+        assert!(!is_network_security_block(&error));
+    }
+
+    #[test]
+    fn accepts_successful_reddit_responses() {
+        ensure_successful_response(StatusCode::OK, "{}").unwrap();
     }
 }

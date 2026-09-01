@@ -30,6 +30,7 @@ mod types;
 mod ytdlp;
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+const REDDIT_REQUEST_DELAY: Duration = Duration::from_secs(5);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -161,12 +162,17 @@ async fn check_post_newness(
 async fn check_new_posts(app: &AppState) -> Result<()> {
     info!("checking subscriptions for new posts");
     let subs = app.db().get_all_subscriptions()?;
-    for sub in subs {
-        check_new_posts_for_subscription(app, &sub)
-            .await
-            .unwrap_or_else(|err| {
-                error!("failed to check subscription for new posts: {err}");
-            });
+    for (index, sub) in subs.iter().enumerate() {
+        if index > 0 {
+            tokio::time::sleep(REDDIT_REQUEST_DELAY).await;
+        }
+        if let Err(err) = check_new_posts_for_subscription(app, sub).await {
+            if reddit::is_network_security_block(&err) {
+                error!("Reddit blocked subscription polling: {err}");
+                break;
+            }
+            error!("failed to check subscription for new posts: {err}");
+        }
     }
 
     Ok(())
@@ -195,31 +201,25 @@ async fn check_new_posts_for_subscription(app: &AppState, sub: &Subscription) ->
         chat_id = chat_id
     );
 
-    match reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time).await {
-        Ok(posts) => {
-            debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
+    let posts = reddit::get_subreddit_top_posts(&app.http, subreddit, limit, &time).await?;
+    debug!("got {} post(s) for subreddit /r/{}", posts.len(), subreddit);
 
-            // First run should not send anything to telegram but the post should be marked
-            // as seen, unless skip_initial_send is enabled
-            let is_new_subreddit = !app
-                .db()
-                .existing_posts_for_subreddit(chat_id, subreddit)
-                .context("failed to query if subreddit has existing posts")?;
-            let only_mark_seen = is_new_subreddit && app.config.skip_initial_send;
+    // First run should not send anything to telegram but the post should be marked
+    // as seen, unless skip_initial_send is enabled
+    let is_new_subreddit = !app
+        .db()
+        .existing_posts_for_subreddit(chat_id, subreddit)
+        .context("failed to query if subreddit has existing posts")?;
+    let only_mark_seen = is_new_subreddit && app.config.skip_initial_send;
 
-            for post in posts {
-                debug!("got {post:?}");
-                check_post_newness(app, chat_id, filter, &post, only_mark_seen)
-                    .await
-                    .unwrap_or_else(|err| {
-                        error!("failed to check post newness: {err}");
-                    });
-            }
-        }
-        Err(e) => {
-            error!("failed to get posts for {}: {e}", subreddit)
-        }
-    };
+    for post in posts {
+        debug!("got {post:?}");
+        check_post_newness(app, chat_id, filter, &post, only_mark_seen)
+            .await
+            .unwrap_or_else(|err| {
+                error!("failed to check post newness: {err}");
+            });
+    }
 
     Ok(())
 }
